@@ -85,7 +85,10 @@ const App = (): ReactElement => {
   const dvcRsvpQuery = useMemo(() => allDvcRsvp(dvc), [dvc]);
 
   const [apiBaseUrl, setApiBaseUrl] = useState("");
-  const [configUrl, setConfigUrl] = useState("/wp-json/dvadsatjeden/v1/config");
+  const [configUrl, setConfigUrl] = useState(() => {
+    const el = document.getElementById("dvadsatjeden-community-app");
+    return el?.dataset.configUrl ?? "/wp-json/dvadsatjeden/v1/config";
+  });
   const [events, setEvents] = useState<EventItem[]>([]);
   const [filterCountry, setFilterCountry] = useState("all");
   const [filterRegion, setFilterRegion] = useState("all");
