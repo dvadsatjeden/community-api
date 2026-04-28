@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import type { NextFunction, Request, Response } from "express";
 import { getRawEvents, importEventsFromSource, isEventsCacheEmpty, selectEvents } from "./modules/events/events.controller";
+import { getCachedCoords } from "./modules/geocoding/geocoding";
 import { listVenues } from "./modules/map/map.controller";
 import { getImportStatus, markImport, markImportError } from "./modules/import/import-status.controller";
 import { getMyRsvp, getRsvpCounts, removeRsvp, submitRsvp } from "./modules/rsvp/rsvp.controller";
@@ -99,7 +100,13 @@ app.get("/v1/events", async (req, res) => {
   const country = typeof req.query.country === "string" && req.query.country.trim().length > 0 ? req.query.country.trim() : undefined;
   const region = typeof req.query.region === "string" && req.query.region.trim().length > 0 ? req.query.region.trim() : undefined;
   const category = typeof req.query.category === "string" && req.query.category.trim().length > 0 ? req.query.category.trim() : undefined;
-  res.json({ items: selectEvents(getRawEvents(), { futureOnly: future, sort, country, region, category }) });
+  const items = selectEvents(getRawEvents(), { futureOnly: future, sort, country, region, category });
+  const enriched = items.map((e) => {
+    if (!e.locationName) return e;
+    const coords = getCachedCoords(e.locationName);
+    return coords ? { ...e, lat: coords[0], lng: coords[1] } : e;
+  });
+  res.json({ items: enriched });
 });
 
 app.get("/v1/venues", (_req, res) => {

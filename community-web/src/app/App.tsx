@@ -20,6 +20,8 @@ type EventItem = {
   description?: string;
   imageUrl?: string;
   sourceUrl?: string;
+  lat?: number;
+  lng?: number;
 };
 
 type RsvpCounts = Record<RsvpStatus, number>;
@@ -108,11 +110,9 @@ const App = (): ReactElement => {
   const [mnemonicError, setMnemonicError] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
   const [view, setView] = useState<ViewName>("home");
-  const [eventCoords, setEventCoords] = useState<Record<string, [number, number]>>({});
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const mapMarkersRef = useRef<L.Marker[]>([]);
-  const geocodingInProgress = useRef(new Set<string>());
 
   const loadLocalRsvpMap = useCallback((ownerId: string): Map<string, RsvpStatus> => {
     try {
@@ -483,35 +483,7 @@ const App = (): ReactElement => {
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   };
 
-  // Geocode event locations sequentially (Nominatim 1 req/s policy)
-  useEffect(() => {
-    if (view !== "map") return;
-    const toGeocode = events.filter(
-      (e) => e.locationName && !eventCoords[e.id] && !geocodingInProgress.current.has(e.id)
-    );
-    if (toGeocode.length === 0) return;
-    let timer: ReturnType<typeof window.setTimeout> | null = null;
-    let i = 0;
-    const runNext = async (): Promise<void> => {
-      if (i >= toGeocode.length) return;
-      const ev = toGeocode[i++];
-      if (!ev.locationName || geocodingInProgress.current.has(ev.id)) { void runNext(); return; }
-      geocodingInProgress.current.add(ev.id);
-      try {
-        const r = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(ev.locationName)}&format=json&limit=1`,
-          { headers: { "Accept-Language": "sk,cs,en" } }
-        );
-        const data = (await r.json()) as Array<{ lat: string; lon: string }>;
-        if (data[0]) setEventCoords((prev) => ({ ...prev, [ev.id]: [parseFloat(data[0].lat), parseFloat(data[0].lon)] }));
-      } catch { /* ignore */ }
-      timer = window.setTimeout(() => { void runNext(); }, 1200);
-    };
-    void runNext();
-    return () => { if (timer !== null) window.clearTimeout(timer); };
-  }, [view, events]); // eventCoords intentionally excluded
-
-  // Init Leaflet + update markers whenever view/events/coords change
+  // Init Leaflet + update markers (coords come from API, no client-side geocoding)
   useEffect(() => {
     if (view !== "map" || !mapContainerRef.current) return;
     if (!leafletMapRef.current) {
@@ -528,21 +500,20 @@ const App = (): ReactElement => {
     mapMarkersRef.current.forEach((m) => m.remove());
     mapMarkersRef.current = [];
     for (const ev of events) {
-      const coords = eventCoords[ev.id];
-      if (!coords) continue;
+      if (ev.lat == null || ev.lng == null) continue;
       const icon = L.divIcon({
         className: "",
         html: `<div class="dvcMapMarker" title="${ev.title.replace(/"/g, "")}"></div>`,
         iconSize: [14, 14],
         iconAnchor: [7, 7],
       });
-      const marker = L.marker(coords, { icon });
+      const marker = L.marker([ev.lat, ev.lng], { icon });
       marker.bindTooltip(ev.title, { direction: "top", offset: [0, -10] });
       marker.on("click", () => setDetailEvent(ev));
       marker.addTo(map);
       mapMarkersRef.current.push(marker);
     }
-  }, [view, events, eventCoords]);
+  }, [view, events]);
 
   const copySeed = async (): Promise<void> => {
     if (!account) return;

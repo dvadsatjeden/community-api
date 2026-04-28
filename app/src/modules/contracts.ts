@@ -13,6 +13,8 @@ export type EventItem = {
   description?: string;
   imageUrl?: string;
   sourceUrl?: string;
+  lat?: number;
+  lng?: number;
 };
 
 export type VenueItem = {
