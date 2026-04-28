@@ -1,0 +1,30 @@
+{
+  "name": "@dvadsatjeden/community-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build && node ./scripts/postbuild-wasm-alias.mjs",
+    "build:wp": "tsc -p tsconfig.json --noEmit && vite build && node ./scripts/postbuild-wasm-alias.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@evolu/common": "^7.4.1",
+    "@evolu/react": "^10.4.0",
+    "@evolu/react-web": "^2.4.0",
+    "@noble/hashes": "^1.7.0",
+    "@scure/bip39": "^1.6.0",
+    "@types/leaflet": "^1.9.21",
+    "leaflet": "^1.9.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}

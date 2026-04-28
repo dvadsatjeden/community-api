@@ -1,0 +1,5 @@
+# Správny MIME pre WebAssembly (Evolu / sqlite wasm). Bez toho môže server vrátiť iný typ a streaming zlyhá.
+<IfModule mod_mime.c>
+  AddType application/wasm .wasm
+  AddType application/javascript .mjs
+</IfModule>
