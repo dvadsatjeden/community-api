@@ -18,7 +18,7 @@ let importAttempted = false;
 
 const SOURCE_URL_DEFAULT = "https://prevadzky.dvadsatjeden.org/wp-json/dvadsatjeden-events/v1/list?country=sk";
 
-const toIso = (value: unknown): string | undefined => {
+export const toIso = (value: unknown): string | undefined => {
   if (typeof value !== "string" || value.trim().length === 0) {
     return undefined;
   }
@@ -52,15 +52,15 @@ const pickImageUrl = (...values: unknown[]): string | undefined => {
   return undefined;
 };
 
-const stripHtml = (value: string): string => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+export const stripHtml = (value: string): string => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
-const shortText = (value: string | undefined, max = 180): string | undefined => {
+export const shortText = (value: string | undefined, max = 180): string | undefined => {
   if (!value) return undefined;
   if (value.length <= max) return value;
   return `${value.slice(0, max - 1).trimEnd()}…`;
 };
 
-const normalizeCategoryTerm = (rawCategory: string | undefined, title: string): string => {
+export const normalizeCategoryTerm = (rawCategory: string | undefined, title: string): string => {
   const c = (rawCategory ?? "").trim().toLowerCase();
   const t = title.trim().toLowerCase();
 
@@ -76,7 +76,7 @@ const normalizeCategoryTerm = (rawCategory: string | undefined, title: string): 
   return "Ostatné";
 };
 
-const normalizeEvent = (event: Record<string, unknown>, index: number): EventItem | null => {
+export const normalizeEvent = (event: Record<string, unknown>, index: number): EventItem | null => {
   const ext =
     event.extendedProps && typeof event.extendedProps === "object"
       ? (event.extendedProps as Record<string, unknown>)

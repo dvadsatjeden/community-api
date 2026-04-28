@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { RsvpStatus } from "../contracts";
 
@@ -87,6 +87,12 @@ export const deleteVote = (eventId: string, anonymousToken: string): void => {
     cache!.set(eventId, byEvent);
   }
   persist();
+};
+
+export const _resetCacheForTesting = (): void => {
+  cache = null;
+  const p = votesPath();
+  if (existsSync(p)) unlinkSync(p);
 };
 
 export const getVotesForToken = (anonymousToken: string): Map<string, RsvpStatus> => {

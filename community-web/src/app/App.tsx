@@ -7,6 +7,7 @@ import { type DerivedAccount, deriveFromMnemonic, generateMnemonic, validateBip3
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./community-app.css";
+import { dateParts, TZ } from "./utils";
 
 type EventItem = {
   id: string;
@@ -25,16 +26,6 @@ type RsvpCounts = Record<RsvpStatus, number>;
 type ViewName = "home" | "calendar" | "map" | "info";
 const EVENT_CATEGORIES = ["MeetUpy", "Bitcoin Pivo", "Konferencie", "Ostatné"] as const;
 
-const TZ = "UTC";
-const dateParts = (iso: string) => {
-  const d = new Date(iso);
-  return {
-    dow:   d.toLocaleString("sk-SK", { weekday: "short",   timeZone: TZ }),
-    day:   d.toLocaleString("sk-SK", { day: "2-digit",     timeZone: TZ }),
-    month: d.toLocaleString("sk-SK", { month: "short",     timeZone: TZ }),
-    time:  d.toLocaleString("sk-SK", { hour: "2-digit", minute: "2-digit", timeZone: TZ }),
-  };
-};
 
 const emptyCounts = (): RsvpCounts => ({ going: 0, maybe: 0, not_going: 0 });
 const RSVP_LOCAL_KEY = "d21.localRsvpByEvent";
