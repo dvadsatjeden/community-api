@@ -795,7 +795,7 @@ const App = (): ReactElement => {
               <h2 className="dvcCardTitle">O aplikácii</h2>
               <p className="dvcMuted" style={{ marginBottom: "10px" }}>Komunitná aplikácia pre Bitcoinerov na Slovensku a v Česku. Sleduj eventy, pridaj sa anonymne cez BIP-39 seed.</p>
               <p className="dvcMuted">
-                Verzia 0.4.0 ·{" "}
+                Verzia {__APP_VERSION__} ·{" "}
                 <a href="https://dvadsatjeden.org" target="_blank" rel="noreferrer">dvadsatjeden.org</a>
               </p>
             </div>
