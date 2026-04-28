@@ -70,6 +70,17 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "community-api" });
 });
 
+app.get("/v1/config", (_req, res) => {
+  res.json({
+    apiBaseUrl: "https://api.dvadsatjeden.org",
+    features: { events: true, map: true, push: false },
+    sources: {
+      events: process.env.EVENTS_SOURCE_URL ?? "",
+      venues: "",
+    },
+  });
+});
+
 app.get("/v1/events", async (req, res) => {
   if (isEventsCacheEmpty()) {
     try {

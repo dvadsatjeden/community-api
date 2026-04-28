@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const assetsDir = path.resolve(__dirname, "../../../wp-content/plugins/dvadsatjeden-community/assets");
+
+const isStandalone = process.argv[2] === "standalone";
+const assetsDir = isStandalone
+  ? path.resolve(__dirname, "../../standalone-dist/assets")
+  : path.resolve(__dirname, "../../../wp-content/plugins/dvadsatjeden-community/assets");
 
 const pickSqliteHashedWasm = () => {
   const files = readdirSync(assetsDir);
