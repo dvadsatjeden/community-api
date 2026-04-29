@@ -7,6 +7,8 @@ import { getSubscriptionCount, getVapidPublicKey, removeSubscription, saveSubscr
 import { listVenues } from "./modules/map/map.controller";
 import { getImportStatus, markImport, markImportError } from "./modules/import/import-status.controller";
 import { getMyRsvp, getRsvpCounts, removeRsvp, submitRsvp } from "./modules/rsvp/rsvp.controller";
+import { getArticles } from "./modules/articles/articles";
+import { getCommunities, getCommunityUrl } from "./modules/communities/communities";
 
 const app = express();
 
@@ -113,6 +115,38 @@ app.get("/v1/events", async (req, res) => {
 
 app.get("/v1/venues", (_req, res) => {
   res.json({ items: listVenues() });
+});
+
+app.get("/v1/articles", async (_req, res) => {
+  try {
+    res.json(await getArticles());
+  } catch {
+    res.status(502).json({ error: "articles unavailable" });
+  }
+});
+
+const joinRateLimit = makeRateLimit(10, 60_000);
+
+app.get("/v1/communities", async (_req, res) => {
+  try {
+    const items = await getCommunities();
+    const safe = items.map(({ url: _url, ...rest }, id) => ({ id, ...rest }));
+    res.json({ items: safe });
+  } catch {
+    res.status(502).json({ error: "communities unavailable" });
+  }
+});
+
+app.get("/v1/communities/:id/join", joinRateLimit, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id) || id < 0) { res.status(400).json({ error: "Invalid id" }); return; }
+  try {
+    const url = await getCommunityUrl(id);
+    if (!url) { res.status(404).json({ error: "Not found" }); return; }
+    res.redirect(302, url);
+  } catch {
+    res.status(502).json({ error: "unavailable" });
+  }
 });
 
 app.post("/v1/push/subscribe", (req, res) => {

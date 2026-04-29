@@ -161,6 +161,8 @@ export const normalizeEvent = (event: Record<string, unknown>, index: number): E
     description: shortText(descriptionRaw ? stripHtml(descriptionRaw) : undefined),
     imageUrl,
     sourceUrl: customLink ?? SOURCE_URL_DEFAULT,
+    free_entry: ext?.free_entry === true || ext?.free_entry === 1 || ext?.free_entry === "true" || ext?.free_entry === "1" || undefined,
+    ticket_link: typeof ext?.ticket_link === "string" && ext.ticket_link.trim() ? ext.ticket_link.trim() : undefined,
   };
 };
 

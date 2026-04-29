@@ -8,25 +8,60 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./community-app.css";
 import { dateParts, TZ } from "./utils";
+import logoMempoolUrl from "./logos/logo-mempool.svg?url";
+import logoBtcmapUrl from "./logos/logo-btcmap.svg?url";
+import logoBtcpayUrl from "./logos/logo-btcpay.svg?url";
+import logoSatfluxUrl from "./logos/logo-satflux.svg?url";
+import logoHydranodeUrl from "./logos/logo-hydranode.svg?url";
 
 type EventItem = {
   id: string;
   title: string;
   startsAt: string;
   locationName?: string;
+  city?: string;
   country?: string;
   region?: string;
   category?: string;
   description?: string;
   imageUrl?: string;
   sourceUrl?: string;
+  free_entry?: boolean;
+  ticket_link?: string;
   lat?: number;
   lng?: number;
 };
 
 type RsvpCounts = Record<RsvpStatus, number>;
-type ViewName = "home" | "calendar" | "map" | "info";
+type ViewName = "home" | "calendar" | "map" | "info" | "uvod";
 const EVENT_CATEGORIES = ["MeetUpy", "Bitcoin Pivo", "Konferencie", "Ostatné"] as const;
+
+type Community = { id: number; name: string; lat: number; lng: number; marker_image?: string };
+
+type WpPost = {
+  id: number;
+  date: string;
+  link: string;
+  title: { rendered: string };
+  _embedded?: { "wp:featuredmedia"?: Array<{ source_url: string }> };
+};
+
+const VekslakIcon = (): ReactElement => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="dvcToolLogoPulse" aria-hidden="true">
+    <path d="M11.767 19.089c4.924.868 6.14-6.025 1.216-6.894m-1.216 6.894L5.86 18.047m5.908 1.042-.347 1.97m1.563-8.864c4.924.869 6.14-6.025 1.215-6.893m-1.215 6.893-3.94-.694m5.155-6.2L8.29 4.26m5.908 1.042.348-1.97M7.48 20.364l3.126-17.727" />
+  </svg>
+);
+
+const TOOLS: Array<{ name: string; desc: string; url: string; emoji: string; logoUrl?: string; logoEl?: ReactElement }> = [
+  { name: "Mempool",      desc: "Bloky a transakcie",        url: "https://mempool.dvadsatjeden.org", emoji: "⛏️", logoUrl: logoMempoolUrl },
+  { name: "BTCPay Server",desc: "Vlastný BTC uzol",          url: "https://btcpayserver.org",        emoji: "⚡", logoUrl: logoBtcpayUrl },
+  { name: "BTC Map",      desc: "Bitcoin prijímajú blízko",  url: "https://btcmap.org",              emoji: "🗺️", logoUrl: logoBtcmapUrl },
+  { name: "Hydranode",    desc: "PoS terminál",              url: "https://hydranode.org",           emoji: "🖥️", logoUrl: logoHydranodeUrl },
+  { name: "SATFLUX",      desc: "Prijímaj Bitcoin jednoducho", url: "https://satflux.io",            emoji: "🔭", logoUrl: logoSatfluxUrl },
+  { name: "DCA Kalkulačka",desc: "Pravidelný nákup BTC",    url: "https://dca.dvadsatjeden.org",    emoji: "📈" },
+  { name: "Vekslak",      desc: "Pomôcka pre výpočty",       url: "https://vekslak.dvadsatjeden.org",emoji: "₿",  logoEl: <VekslakIcon /> },
+  { name: "CBDC.icu",     desc: "CBDC vs. Bitcoin",          url: "https://cbdc.icu",               emoji: "🏦" },
+];
 
 
 const emptyCounts = (): RsvpCounts => ({ going: 0, maybe: 0, not_going: 0 });
@@ -73,6 +108,32 @@ const MapPinIcon = (): ReactElement => (
   </svg>
 );
 
+const ToolLogo = ({ logoUrl, emoji }: { logoUrl: string | undefined; emoji: string }): ReactElement => {
+  const [failed, setFailed] = useState(false);
+  if (logoUrl && !failed) {
+    return <img className="dvcToolLogoImg" src={logoUrl} alt="" loading="lazy" onError={() => setFailed(true)} />;
+  }
+  return <span className="dvcToolEmoji">{emoji}</span>;
+};
+
+const WP_UPLOADS = "https://www.dvadsatjeden.org/wp-content/uploads/2023/09/";
+
+const CommunityLogo = ({ community }: { community: Community }): ReactElement => {
+  const cityName = community.name.replace(/^Dvadsatjeden\s+/, "").trim();
+  const slug = cityName.toLowerCase().replace(/[\s/]+/g, "-");
+  const [attempt, setAttempt] = useState(0);
+  const urls = [
+    community.marker_image || null,
+    `${WP_UPLOADS}${cityName}.svg`,
+    `${WP_UPLOADS}${cityName}.webp`,
+    `${WP_UPLOADS}${slug}.svg`,
+    `${WP_UPLOADS}${slug}.webp`,
+  ].filter(Boolean) as string[];
+
+  if (attempt >= urls.length) return <span className="dvcCommunityModalEmoji">₿</span>;
+  return <img key={urls[attempt]} src={urls[attempt]} onError={() => setAttempt((a) => a + 1)} className="dvcCommunityModalLogo" alt="" />;
+};
+
 const App = (): ReactElement => {
   const dvc = useDvcEvolu();
   const dvcRsvpQuery = useMemo(() => allDvcRsvp(dvc), [dvc]);
@@ -86,11 +147,19 @@ const App = (): ReactElement => {
     return "unknown";
   });
   const [pushLoading, setPushLoading] = useState(false);
+  const [mode] = useState<"embedded" | "standalone">(() => {
+    const el = document.getElementById("dvadsatjeden-community-app");
+    const url = el?.dataset.configUrl ?? "/wp-json/dvadsatjeden/v1/config";
+    return url.includes("/wp-json/") ? "embedded" : "standalone";
+  });
   const [configUrl, setConfigUrl] = useState(() => {
     const el = document.getElementById("dvadsatjeden-community-app");
     return el?.dataset.configUrl ?? "/wp-json/dvadsatjeden/v1/config";
   });
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [articles, setArticles] = useState<WpPost[]>([]);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [mapLayers, setMapLayers] = useState<Set<string>>(() => new Set(["events", "communities"]));
   const [filterCountry, setFilterCountry] = useState("all");
   const [filterRegion, setFilterRegion] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -117,10 +186,14 @@ const App = (): ReactElement => {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(() => !localStorage.getItem("d21.account"));
   const [mnemonicError, setMnemonicError] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
-  const [view, setView] = useState<ViewName>("home");
+  const [communityDetail, setCommunityDetail] = useState<Community | null>(null);
+  const [geoLocating, setGeoLocating] = useState(false);
+  const [view, setView] = useState<ViewName>(() => mode === "standalone" ? "uvod" : "home");
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const mapMarkersRef = useRef<L.Marker[]>([]);
+  const communitiesMarkersRef = useRef<L.Marker[]>([]);
+  const userMarkerRef = useRef<L.Marker | null>(null);
 
   const loadLocalRsvpMap = useCallback((ownerId: string): Map<string, RsvpStatus> => {
     try {
@@ -275,6 +348,56 @@ const App = (): ReactElement => {
       .then((data) => setEvents((data.items ?? []) as EventItem[]));
   }, [apiBaseUrl]);
 
+  useEffect(() => {
+    if (!apiBaseUrl) return;
+    void fetch(`${apiBaseUrl}/v1/articles`)
+      .then((r) => r.json())
+      .then((data) => setArticles(Array.isArray(data) ? (data as WpPost[]) : []))
+      .catch(() => {});
+  }, [apiBaseUrl]);
+
+  useEffect(() => {
+    if (!apiBaseUrl) return;
+    void fetch(`${apiBaseUrl}/v1/communities`)
+      .then((r) => r.json())
+      .then((data) => {
+        const items = (data as { items?: Community[] }).items;
+        setCommunities(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {});
+  }, [apiBaseUrl]);
+
+  const toggleMapLayer = (layer: string) => setMapLayers((prev) => {
+    const next = new Set(prev);
+    if (next.has(layer)) next.delete(layer); else next.add(layer);
+    return next;
+  });
+
+  const locateMe = (): void => {
+    if (!navigator.geolocation) return;
+    setGeoLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoLocating(false);
+        const { latitude: lat, longitude: lng } = pos.coords;
+        const map = leafletMapRef.current;
+        if (!map) return;
+        map.setView([lat, lng], 11);
+        if (userMarkerRef.current) userMarkerRef.current.remove();
+        const icon = L.divIcon({ className: "", html: '<div class="dvcMapUserMarker"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+        userMarkerRef.current = L.marker([lat, lng], { icon }).addTo(map);
+        const nearest = communities.reduce<Community | null>((best, c) => {
+          const d = Math.hypot(c.lat - lat, c.lng - lng);
+          if (!best) return c;
+          return d < Math.hypot(best.lat - lat, best.lng - lng) ? c : best;
+        }, null);
+        if (nearest) setCommunityDetail(nearest);
+      },
+      () => setGeoLocating(false),
+      { timeout: 8000 },
+    );
+  };
+
   const refetchAllPublicCounts = useCallback(async () => {
     if (!apiBaseUrl || events.length === 0) return;
     const next: Record<string, RsvpCounts> = {};
@@ -349,11 +472,12 @@ const App = (): ReactElement => {
       if (event.key !== "Escape") return;
       if (lightboxImageUrl) { setLightboxImageUrl(null); return; }
       if (detailEvent) { setDetailEvent(null); return; }
+      if (communityDetail) { setCommunityDetail(null); return; }
       if (isAccountModalOpen) setIsAccountModalOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightboxImageUrl, detailEvent, isAccountModalOpen]);
+  }, [lightboxImageUrl, detailEvent, communityDetail, isAccountModalOpen]);
 
   const createAccount = (): void => {
     const next = deriveFromMnemonic(suggestedSeed);
@@ -489,7 +613,7 @@ const App = (): ReactElement => {
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
   };
 
-  // Init Leaflet + update markers (coords come from API, no client-side geocoding)
+  // Init Leaflet + update markers and GeoJSON layers
   useEffect(() => {
     if (view !== "map" || !mapContainerRef.current) return;
     if (!leafletMapRef.current) {
@@ -503,23 +627,46 @@ const App = (): ReactElement => {
       leafletMapRef.current.invalidateSize();
     }
     const map = leafletMapRef.current;
+
+    // Events layer
     mapMarkersRef.current.forEach((m) => m.remove());
     mapMarkersRef.current = [];
-    for (const ev of events) {
-      if (ev.lat == null || ev.lng == null) continue;
-      const icon = L.divIcon({
-        className: "",
-        html: `<div class="dvcMapMarker" title="${ev.title.replace(/"/g, "")}"></div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7],
-      });
-      const marker = L.marker([ev.lat, ev.lng], { icon });
-      marker.bindTooltip(ev.title, { direction: "top", offset: [0, -10] });
-      marker.on("click", () => setDetailEvent(ev));
-      marker.addTo(map);
-      mapMarkersRef.current.push(marker);
+    if (mapLayers.has("events")) {
+      for (const ev of events) {
+        if (ev.lat == null || ev.lng == null) continue;
+        const icon = L.divIcon({
+          className: "",
+          html: `<div class="dvcMapMarker" title="${ev.title.replace(/"/g, "")}"></div>`,
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        });
+        const marker = L.marker([ev.lat, ev.lng], { icon });
+        marker.bindTooltip(ev.title, { direction: "top", offset: [0, -10] });
+        marker.on("click", () => setDetailEvent(ev));
+        marker.addTo(map);
+        mapMarkersRef.current.push(marker);
+      }
     }
-  }, [view, events]);
+
+    // Communities layer (point markers)
+    communitiesMarkersRef.current.forEach((m) => m.remove());
+    communitiesMarkersRef.current = [];
+    if (mapLayers.has("communities")) {
+      for (const c of communities) {
+        const icon = L.divIcon({
+          className: "",
+          html: `<div class="dvcMapCommunityMarker"></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+        const marker = L.marker([c.lat, c.lng], { icon });
+        marker.bindTooltip(c.name, { direction: "top", offset: [0, -10] });
+        marker.on("click", () => setCommunityDetail(c));
+        marker.addTo(map);
+        communitiesMarkersRef.current.push(marker);
+      }
+    }
+  }, [view, events, mapLayers, communities]);
 
   // ── Push notifications ───────────────────────────────────────────────────
 
@@ -611,26 +758,21 @@ const App = (): ReactElement => {
     return Array.from(map.values());
   }, [events]);
 
+  const filteredEventGroups = useMemo(() => {
+    const map = new Map<string, { label: string; evs: EventItem[] }>();
+    for (const ev of filteredEvents) {
+      const d = new Date(ev.startsAt);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      if (!map.has(key)) map.set(key, { label: d.toLocaleString("sk-SK", { month: "long", year: "numeric", timeZone: TZ }), evs: [] });
+      map.get(key)!.evs.push(ev);
+    }
+    return Array.from(map.values());
+  }, [filteredEvents]);
+
   return (
     <div className="dvc">
       <div className="dvcShell">
         {view === "home" ? (<>
-        <header className="dvcHero">
-          <div className="dvcHeroTop">
-            <h1 className="dvcTitle">Komunitná appka</h1>
-            <button
-              className={`dvcBtn ${account ? "dvcBtnGhost" : "dvcBtnPrimary"} dvcAccountBtn`}
-              type="button"
-              onClick={() => setIsAccountModalOpen(true)}
-            >
-              {account ? "Môj účet" : "Vytvor účet"}
-            </button>
-          </div>
-          <p className="dvcSub dvcSub--hero">
-            Nadchádzajúce Bitcoin eventy na Slovensku a v Česku. RSVP funguje anonymne — účet je len seed uložený u teba v prehliadači.
-          </p>
-        </header>
-
         <div className="dvcGrid dvcGrid--spaced">
           <div className="dvcCard dvcCard--wide dvcCard--events">
             <h2 className="dvcCardTitle">Budúce udalosti</h2>
@@ -680,13 +822,19 @@ const App = (): ReactElement => {
             {apiBaseUrl && events.length > 0 && filteredEvents.length === 0 ? <div className="dvcEmpty">Pre zvolené filtre nie sú žiadne udalosti.</div> : null}
 
             <div className="dvcEventList">
-              {filteredEvents.map((event) => {
+              {filteredEventGroups.map(({ label, evs }) => (
+              <React.Fragment key={label}>
+                <div className="dvcEventMonthDivider">{label}</div>
+              {evs.map((event) => {
                 const parts = dateParts(event.startsAt);
                 const counts = countsByEvent[event.id] ?? emptyCounts();
                 const mine = clearedRsvpEventIds.has(event.id) ? undefined : (localRsvpByEvent.get(event.id) ?? myRsvpByEvent.get(event.id));
                 return (
                   <article className="dvcEvent" key={event.id}>
-                    {event.category ? <span className="dvcEventCategory">{event.category}</span> : null}
+                    <div className="dvcEventBadges">
+                      {event.category ? <span className="dvcEventCategory">{event.category}</span> : null}
+                      {event.free_entry ? <span className="dvcEventCategory dvcEventCategory--free">Vstup voľný</span> : null}
+                    </div>
                     <div className="dvcEventDateCol">
                       <div className="dvcEventDate" aria-label="Dátum udalosti">
                         <div className="dvcEventDow">{parts.dow}</div>
@@ -764,20 +912,148 @@ const App = (): ReactElement => {
                         </button>
                       ) : null}
                       {account && !evoluReady ? <span className="dvcPill dvcPill--wait">Evolu nedostupné</span> : null}
+                      {!event.free_entry && event.ticket_link ? (
+                        <a className="dvcBtn dvcBtn--rsvp dvcBtn--ticket" href={event.ticket_link} target="_blank" rel="noreferrer">Kúpiť vstupenku</a>
+                      ) : null}
                     </div>
                   </article>
                 );
               })}
+              </React.Fragment>
+              ))}
             </div>
           </div>
         </div>
         </>) : null}
 
+        {/* ── Úvod view (standalone only) ── */}
+        {view === "uvod" ? (
+          <div className="dvcUvodView">
+            <header className="dvcUvodHeader">
+              <img
+                className="dvcUvodLogo"
+                src="https://www.dvadsatjeden.org/wp-content/uploads/2023/09/Logo-Mensie.svg"
+                alt="Dvadsatjeden.org"
+                loading="eager"
+              />
+              <p className="dvcUvodTagline">Bitcoin komunita na Slovensku</p>
+            </header>
+
+            <section className="dvcUvodSection">
+              <h2 className="dvcUvodSectionTitle">Kde začať</h2>
+              <div className="dvcKdeZacat">
+                <p className="dvcMuted">
+                  Dvadsatjeden je komunita, ktorá prepája Bitcoinerov, šíri osvetu a edukuje.
+                  Pravidelne organizujeme meetupy, Bitcoin pivo stretnutia a konferencie.
+                  Najrýchlejšie sa zapojíš cez Signal skupinu — tam sa dozvieš o novinkách ako prvý.
+                </p>
+                <div className="dvcRow">
+                  <button className="dvcBtn dvcBtnPrimary" type="button" onClick={() => setView("map")}>
+                    Pripojiť sa do skupiny
+                  </button>
+                  <a className="dvcBtn dvcBtnGhost" href="https://www.dvadsatjeden.org" target="_blank" rel="noreferrer">
+                    Viac o komunite
+                  </a>
+                </div>
+              </div>
+            </section>
+
+            <section className="dvcUvodSection">
+              <h2 className="dvcUvodSectionTitle">Ako to funguje</h2>
+              <div className="dvcFeatureGrid">
+                <div className="dvcFeatureCard">
+                  <span className="dvcFeatureIcon">📅</span>
+                  <span className="dvcFeatureName">Kalendár eventov</span>
+                  <span className="dvcFeatureDesc">Prehľad všetkých Bitcoin akcií na Slovensku — filtruj podľa kraja alebo kategórie.</span>
+                </div>
+                <div className="dvcFeatureCard">
+                  <span className="dvcFeatureIcon">🗺️</span>
+                  <span className="dvcFeatureName">Mapa komunít</span>
+                  <span className="dvcFeatureDesc">Zobrazuje lokálne Signal skupiny a eventy na interaktívnej mape Slovenska.</span>
+                </div>
+                <div className="dvcFeatureCard">
+                  <span className="dvcFeatureIcon">🔐</span>
+                  <span className="dvcFeatureName">Anonymný účet</span>
+                  <span className="dvcFeatureDesc">Identita tvorená 12-slovným BIP-39 seedom. Žiadna emailová adresa ani registrácia.</span>
+                </div>
+                <div className="dvcFeatureCard">
+                  <span className="dvcFeatureIcon">✅</span>
+                  <span className="dvcFeatureName">RSVP bez registrácie</span>
+                  <span className="dvcFeatureDesc">Oznám účasť na evente anonymne. Tvoj seed sa nikdy neposiela na server.</span>
+                </div>
+                <div className="dvcFeatureCard">
+                  <span className="dvcFeatureIcon">🔔</span>
+                  <span className="dvcFeatureName">Push notifikácie</span>
+                  <span className="dvcFeatureDesc">Dostávaj upozornenia na nové eventy priamo do prehliadača cez Web Push.</span>
+                </div>
+                <div className="dvcFeatureCard">
+                  <span className="dvcFeatureIcon">📲</span>
+                  <span className="dvcFeatureName">Inštalovateľná PWA</span>
+                  <span className="dvcFeatureDesc">Nainštaluj ako natívnu appku na mobil alebo počítač — funguje aj offline.</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="dvcUvodSection">
+              <div className="dvcUvodSectionHeader">
+                <h2 className="dvcUvodSectionTitle">Najnovšie články</h2>
+                <a className="dvcUvodSectionMore" href="https://www.dvadsatjeden.org/blog/" target="_blank" rel="noreferrer">
+                  Všetky články →
+                </a>
+              </div>
+              {articles.length === 0 ? (
+                <div className="dvcEmpty">Načítavam články…</div>
+              ) : (
+                <div className="dvcArticleList">
+                  {articles.map((post) => (
+                    <a key={post.id} className="dvcArticleCard" href={post.link} target="_blank" rel="noreferrer">
+                      {post._embedded?.["wp:featuredmedia"]?.[0]?.source_url ? (
+                        <div className="dvcArticleImg">
+                          <img src={post._embedded["wp:featuredmedia"][0].source_url} alt="" loading="lazy" />
+                        </div>
+                      ) : null}
+                      <div className="dvcArticleBody">
+                        <span className="dvcArticleTitle" dangerouslySetInnerHTML={{ __html: post.title.rendered }} />
+                        <span className="dvcArticleDate">
+                          {new Date(post.date).toLocaleDateString("sk-SK", { day: "numeric", month: "long", year: "numeric" })}
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="dvcUvodSection">
+              <h2 className="dvcUvodSectionTitle">Nástroje</h2>
+              <div className="dvcToolGrid">
+                {TOOLS.map((tool) => (
+                  <a key={tool.url} className="dvcToolCard" href={tool.url} target="_blank" rel="noreferrer">
+                    <div className="dvcToolIconWrap">
+                      {tool.logoEl ?? <ToolLogo logoUrl={tool.logoUrl} emoji={tool.emoji} />}
+                    </div>
+                    <span className="dvcToolName">{tool.name}</span>
+                    <span className="dvcToolDesc">{tool.desc}</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
         {/* ── Calendar view ── */}
         {view === "calendar" ? (
           <div className="dvcCalView">
             <header className="dvcViewHeader">
-              <h2 className="dvcViewTitle">Kalendár eventov</h2>
+              <h2 className="dvcViewTitle">Najbližšie udalosti</h2>
+              <a
+                className="dvcBtn dvcBtnGhost dvcBtnSm"
+                href="https://prevadzky.dvadsatjeden.org/pridat/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                + Pridať
+              </a>
             </header>
             {calendarGroups.length === 0 ? <div className="dvcEmpty">Žiadne udalosti.</div> : null}
             {calendarGroups.map(({ label, evs }) => (
@@ -796,6 +1072,7 @@ const App = (): ReactElement => {
                       <div className="dvcCalItemBody">
                         <span className="dvcCalTitle">{ev.title}</span>
                         {ev.locationName ? <span className="dvcCalLocation"><MapPinIcon />{ev.locationName}</span> : null}
+                        {ev.free_entry ? <span className="dvcCalFree">Vstup voľný</span> : null}
                       </div>
                       {mine ? <span className={`dvcEventDateState dvcEventDateState--${mine}`}>{mine === "going" ? "IDEM" : "MOŽNO"}</span> : null}
                     </button>
@@ -808,13 +1085,75 @@ const App = (): ReactElement => {
 
         {/* ── Map view — always in DOM so Leaflet persists ── */}
         <div className="dvcMapViewWrapper" style={{ display: view === "map" ? "flex" : "none" }}>
-          <p className="dvcMapHint">Geokódovanie adries… Klikni na marker pre detail.</p>
+          <div className="dvcMapLayerBar">
+            <button
+              className={`dvcMapLayerChip${mapLayers.has("events") ? " dvcMapLayerChip--active" : ""}`}
+              type="button"
+              onClick={() => toggleMapLayer("events")}
+            >
+              Eventy
+            </button>
+            <button
+              className={`dvcMapLayerChip${mapLayers.has("communities") ? " dvcMapLayerChip--active" : ""}`}
+              type="button"
+              onClick={() => toggleMapLayer("communities")}
+            >
+              Komunity
+            </button>
+            <button className="dvcMapLayerChip dvcMapLayerChip--soon" type="button" disabled>
+              Obchodníci
+            </button>
+            <button
+              className={`dvcMapLocateBtn${geoLocating ? " dvcMapLocateBtn--loading" : ""}`}
+              type="button"
+              onClick={locateMe}
+              aria-label="Nájdi moju komunitu"
+              disabled={geoLocating}
+            >
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5"/>
+                <line x1="8" y1="1" x2="8" y2="4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="8" y1="11.5" x2="8" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="1" y1="8" x2="4.5" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="11.5" y1="8" x2="15" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              {geoLocating ? "Hľadám…" : "Moja poloha"}
+            </button>
+          </div>
+          <div className="dvcMapLegend" aria-hidden="true">
+            <span className="dvcMapLegendItem"><span className="dvcMapLegendDot dvcMapLegendDot--event" />Eventy — Bitcoin akcie</span>
+            <span className="dvcMapLegendItem"><span className="dvcMapLegendDot dvcMapLegendDot--community" />Komunity — Signal skupiny</span>
+          </div>
           <div ref={mapContainerRef} className="dvcMapContainer" />
         </div>
 
-        {/* ── Info view ── */}
+        {/* ── Info / Nastavenia view ── */}
         {view === "info" ? (
           <div className="dvcInfoView">
+            <div className="dvcCard" style={{ marginBottom: "12px" }}>
+              <h2 className="dvcCardTitle">Profil</h2>
+              <div className="dvcRow" style={{ justifyContent: "space-between", gap: "12px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {account ? (
+                    <div className="dvcPillGroup" style={{ marginBottom: 0 }}>
+                      <span className="dvcPill dvcPill--ok">Účet aktívny</span>
+                      {evoluReady ? <span className="dvcPill dvcPill--ok">Sync: OK</span> : null}
+                      {!evoluReady && isEvoluConnecting ? <span className="dvcPill dvcPill--wait">Syncing…</span> : null}
+                    </div>
+                  ) : (
+                    <p className="dvcMuted" style={{ margin: 0 }}>Bez účtu — RSVP nefunguje.</p>
+                  )}
+                </div>
+                <button
+                  className={`dvcBtn ${account ? "dvcBtnGhost" : "dvcBtnPrimary"}`}
+                  type="button"
+                  onClick={() => setIsAccountModalOpen(true)}
+                  style={{ flexShrink: 0 }}
+                >
+                  {account ? "Môj účet" : "Vytvor účet"}
+                </button>
+              </div>
+            </div>
             {pushFeature && pushStatus !== "unsupported" ? (
               <div className="dvcCard" style={{ marginBottom: "12px" }}>
                 <h2 className="dvcCardTitle">Notifikácie</h2>
@@ -839,7 +1178,7 @@ const App = (): ReactElement => {
             ) : null}
             <div className="dvcCard dvcCard--accent">
               <h2 className="dvcCardTitle">O aplikácii</h2>
-              <p className="dvcMuted" style={{ marginBottom: "10px" }}>Komunitná aplikácia pre Bitcoinerov na Slovensku a v Česku. Sleduj eventy, pridaj sa anonymne cez BIP-39 seed.</p>
+              <p className="dvcMuted" style={{ marginBottom: "10px" }}>Komunitná aplikácia pre Bitcoinerov na Slovensku. Sleduj eventy, oznam účasť anonymne — bez registrácie, len 12 slov ako kľúč.</p>
               <p className="dvcMuted">
                 Verzia {__APP_VERSION__} ·{" "}
                 <a href="https://dvadsatjeden.org" target="_blank" rel="noreferrer">dvadsatjeden.org</a>
@@ -878,6 +1217,7 @@ const App = (): ReactElement => {
 
                 <div className="dvcEventModalBody">
                   {detailEvent.category ? <span className="dvcEventCategory dvcEventCategory--modal">{detailEvent.category}</span> : null}
+                  {detailEvent.free_entry ? <span className="dvcEventCategory dvcEventCategory--modal dvcEventCategory--free">Vstup voľný</span> : null}
                   <h2 className="dvcModalTitle" style={{ marginTop: "8px" }}>{detailEvent.title}</h2>
                   <div className="dvcEventModalMeta">
                     <span className="dvcEventModalMetaRow">
@@ -929,6 +1269,12 @@ const App = (): ReactElement => {
                   </div>
 
                   <div className="dvcEventModalActions">
+                    {!detailEvent.free_entry && detailEvent.ticket_link ? (
+                      <a className="dvcBtn dvcBtn--ticket" href={detailEvent.ticket_link} target="_blank" rel="noreferrer">
+                        Kúpiť vstupenku
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{marginLeft:"6px",verticalAlign:"middle"}}><path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7M8 1h3v3M11 1 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </a>
+                    ) : null}
                     {detailEvent.sourceUrl ? (
                       <a className="dvcBtn dvcBtnPrimary" href={detailEvent.sourceUrl} target="_blank" rel="noreferrer">
                         Detail
@@ -950,6 +1296,71 @@ const App = (): ReactElement => {
           );
         })() : null}
 
+        {communityDetail ? (() => {
+          const cityName = communityDetail.name.replace(/^Dvadsatjeden\s+/, "").trim();
+          const now = new Date();
+          const communityEvents = events
+            .filter((ev) => {
+              const evCity = ev.city ?? ev.locationName ?? "";
+              return evCity === cityName || evCity.split(/[,/]+/).some((p) => p.trim() === cityName);
+            })
+            .filter((ev) => new Date(ev.startsAt) >= now)
+            .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+            .slice(0, 4);
+          return (
+            <div className="dvcModal" role="dialog" aria-modal="true" aria-label={communityDetail.name} onClick={() => setCommunityDetail(null)}>
+              <div className="dvcModalPanel dvcCommunityModalPanel" key={communityDetail.id} onClick={(e) => e.stopPropagation()}>
+                <button className="dvcModalClose" type="button" onClick={() => setCommunityDetail(null)} aria-label="Zatvoriť">×</button>
+
+                <div className="dvcCommunityModalHeader">
+                  <div className="dvcCommunityModalLogoWrap">
+                    <CommunityLogo community={communityDetail} />
+                  </div>
+                  <div className="dvcCommunityModalMeta">
+                    <h2 className="dvcCommunityModalName">{communityDetail.name}</h2>
+                    <span className="dvcCommunityModalCity">{cityName}</span>
+                  </div>
+                </div>
+
+                {communityEvents.length > 0 ? (
+                  <div className="dvcCommunityModalEvents">
+                    <h3 className="dvcCommunityModalSectionTitle">Najbližšie akcie</h3>
+                    {communityEvents.map((ev) => {
+                      const d = new Date(ev.startsAt);
+                      const day = d.toLocaleString("sk-SK", { day: "numeric", month: "short", timeZone: TZ });
+                      const time = d.toLocaleString("sk-SK", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
+                      return (
+                        <button key={ev.id} className="dvcCommunityModalEvent" type="button"
+                          onClick={() => { setCommunityDetail(null); setDetailEvent(ev); }}>
+                          <span className="dvcCommunityModalEventDate">{day}</span>
+                          <span className="dvcCommunityModalEventInfo">
+                            <span className="dvcCommunityModalEventTitle">{ev.title}</span>
+                            <span className="dvcCommunityModalEventTime">{time}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                <div className="dvcCommunityModalJoin">
+                  <p className="dvcCommunityModalJoinNote">Pripojiť sa do lokálnej Signal skupiny</p>
+                  <a
+                    className="dvcBtn dvcBtnPrimary dvcCommunityModalJoinBtn"
+                    href={`${apiBaseUrl}/v1/communities/${communityDetail.id}/join`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setCommunityDetail(null)}
+                  >
+                    Otvoriť Signal skupinu
+                    <svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ marginLeft: "6px", verticalAlign: "middle" }}><path d="M5 2H2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7M8 1h3v3M11 1 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </a>
+                </div>
+              </div>
+            </div>
+          );
+        })() : null}
+
         {isAccountModalOpen ? (
           <div className="dvcModal" role="dialog" aria-modal="true" aria-label="Správa účtu" onClick={() => setIsAccountModalOpen(false)}>
             <div className="dvcModalPanel" onClick={(e) => e.stopPropagation()}>
@@ -957,26 +1368,28 @@ const App = (): ReactElement => {
 
               {!account ? (
                 <>
-                  <h2 className="dvcModalTitle">Vytvor alebo obnov účet</h2>
+                  <h2 className="dvcModalTitle">Vytvor účet</h2>
                   <p className="dvcMuted dvcMuted--sm" style={{ marginBottom: "20px" }}>
-                    Účet je 12-slovný seed uložený iba v tvojom prehliadači. Seed sa nikdy neposiela na server.
+                    Tvoj účet je týchto 12 slov. Ulož si ich — ak ich stratíš, stratíš prístup k svojim RSVP. Nikto iný ich nevidí, ani my.
                   </p>
 
                   <div className="dvcFieldRow">
                     <div>
-                      <div className="dvcLabel">Navrhovaný seed — ulož si ho skôr, ako vytvoríš účet</div>
+                      <div className="dvcLabel">
+                        ⚠️ Zapíš si tieto slová skôr, ako klikneš na tlačidlo
+                      </div>
                       <SeedTable mnemonic={suggestedSeed} />
                     </div>
                     <div className="dvcRow">
                       <button className="dvcBtn dvcBtnPrimary" type="button" onClick={createAccount} disabled={!suggestedSeed}>
-                        Vytvoriť anonymný účet
+                        Zapísal som si ich — vytvoriť účet
                       </button>
                     </div>
 
                     <hr className="dvcDivider" />
 
                     <div>
-                      <div className="dvcLabel">Obnoviť účet — vlož 12 slov v správnom poradí</div>
+                      <div className="dvcLabel">Máš existujúci účet? Vlož svojich 12 slov</div>
                       <textarea
                         className="dvcTextarea"
                         value={mnemonicInput}
@@ -1014,7 +1427,7 @@ const App = (): ReactElement => {
                     </div>
 
                     <div>
-                      <div className="dvcLabel">Seed (12 slov — nikomu neposielaj)</div>
+                      <div className="dvcLabel">Záloha — 12 slov (nikomu neposielaj)</div>
                       <div className="dvcRow" style={{ marginBottom: "10px" }}>
                         <button className="dvcBtn dvcBtnGhost" type="button" onClick={() => setIsSeedVisible((v) => !v)}>
                           {isSeedVisible ? "Skryť seed" : "Zobraziť seed"}
@@ -1068,14 +1481,14 @@ const App = (): ReactElement => {
 
       {/* ── Bottom nav ── */}
       <nav className="dvcNav" aria-label="Navigácia">
-        <button className={view === "home" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("home")}>
+        <button className={view === "uvod" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("uvod")}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M3 12L12 4l9 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             <path d="M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span>Eventy</span>
+          <span>Úvod</span>
         </button>
-        <button className={view === "calendar" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("calendar")}>
+        <button className={view === "home" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("home")}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.8"/>
             <path d="M8 2v4M16 2v4M3 10h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
@@ -1093,10 +1506,10 @@ const App = (): ReactElement => {
         </button>
         <button className={view === "info" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("info")}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
-            <path d="M12 8v1M12 11v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8"/>
+            <path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
           </svg>
-          <span>Info</span>
+          <span>Nastavenia</span>
         </button>
       </nav>
     </div>

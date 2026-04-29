@@ -13,6 +13,8 @@ export type EventItem = {
   description?: string;
   imageUrl?: string;
   sourceUrl?: string;
+  free_entry?: boolean;
+  ticket_link?: string;
   lat?: number;
   lng?: number;
 };

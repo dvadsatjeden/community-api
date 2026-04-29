@@ -278,6 +278,18 @@
   display: flex; flex-direction: column; gap: 10px; margin-top: 4px;
 }
 
+.dvcEventMonthDivider {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dvc-btc);
+  padding: 6px 2px 0;
+  margin-top: 4px;
+}
+.dvcEventMonthDivider:first-child { margin-top: 0; padding-top: 0; }
+
 .dvcEvent {
   position: relative;
   background: rgba(255, 255, 255, 0.035);
@@ -551,6 +563,12 @@
   color: var(--dvc-text);
 }
 .dvcBtnGhost:hover { background: rgba(255, 255, 255, 0.06); }
+
+.dvcBtnSm {
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  border-radius: 999px;
+}
 
 .dvcBtn--rsvp {
   padding: 8px 14px;
@@ -836,9 +854,17 @@
 .dvcModalPanel .dvcPillGroup { margin-bottom: 18px; }
 
 /* ── Category badge (absolute top-right of event card) ──────────────── */
-.dvcEventCategory {
+.dvcEventBadges {
   position: absolute;
   top: 12px; right: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: 55%;
+}
+
+.dvcEventCategory {
   font-size: 0.67rem;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -855,6 +881,39 @@
   position: static;
   display: inline-block;
   margin-bottom: 2px;
+}
+
+.dvcEventCategory--free {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.dvcPill--ticket {
+  background: rgba(247, 147, 26, 0.12);
+  color: var(--dvc-btc);
+  border: 1px solid rgba(247, 147, 26, 0.3);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.72rem; font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  display: inline-flex; align-items: center;
+}
+.dvcPill--ticket:hover { background: rgba(247, 147, 26, 0.22); }
+
+.dvcBtn--ticket {
+  background: rgba(247, 147, 26, 0.12);
+  color: var(--dvc-btc);
+  border-color: rgba(247, 147, 26, 0.3);
+}
+.dvcBtn--ticket:hover { background: rgba(247, 147, 26, 0.22); }
+
+.dvcCalFree {
+  font-size: 0.65rem; font-weight: 700;
+  color: #4ade80;
+  letter-spacing: .03em;
+  margin-top: 1px;
 }
 
 /* ── Counts inline text ──────────────────────────────────────────────── */
@@ -1114,6 +1173,10 @@ a.dvcEventLocationLink:hover {
 /* ── View header ─────────────────────────────────────────────────────── */
 .dvcViewHeader {
   padding: 20px 4px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .dvcViewTitle {
   font-family: 'Poppins', system-ui, sans-serif;
@@ -1225,15 +1288,86 @@ a.dvcEventLocationLink:hover {
   border: 1px solid var(--dvc-glass-border);
 }
 
-.dvcMapHint {
-  font-size: 0.76rem;
-  color: var(--dvc-muted-2);
-  text-align: center;
-  padding: 6px 12px;
-  margin: 0;
-  background: rgba(0,0,0,0.4);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+.dvcMapLayerBar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
+
+.dvcMapLayerChip {
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--dvc-border-strong);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dvc-muted);
+  font-family: 'Roboto', system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  line-height: 1.4;
+}
+.dvcMapLayerChip:hover { background: rgba(255, 255, 255, 0.09); color: var(--dvc-text); }
+.dvcMapLayerChip--active {
+  background: var(--dvc-btc-dim);
+  border-color: rgba(247, 147, 26, 0.4);
+  color: var(--dvc-btc);
+}
+.dvcMapLayerChip--active:hover { background: rgba(247, 147, 26, 0.2); }
+.dvcMapLayerChip--soon { opacity: 0.38; cursor: not-allowed; }
+
+.dvcMapLocateBtn {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: var(--dvc-muted);
+  font-size: 0.78rem; font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dvcMapLocateBtn:hover { background: rgba(255,255,255,0.1); color: var(--dvc-text); }
+.dvcMapLocateBtn--loading { opacity: 0.6; cursor: wait; }
+
+.dvcMapUserMarker {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #60a5fa;
+  border: 3px solid white;
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.35), 0 0 12px rgba(96,165,250,0.5);
+  animation: dvcUserPulse 2s ease-in-out infinite;
+}
+@keyframes dvcUserPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(96,165,250,0.35), 0 0 12px rgba(96,165,250,0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(96,165,250,0.15), 0 0 18px rgba(96,165,250,0.3); }
+}
+
+.dvcMapLegend {
+  display: flex; gap: 16px; align-items: center;
+  padding: 6px 14px;
+  background: rgba(0,0,0,0.3);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.dvcMapLegendItem {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.7rem; color: var(--dvc-muted);
+}
+.dvcMapLegendDot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dvcMapLegendDot--event    { background: #f7931a; box-shadow: 0 0 4px rgba(247,147,26,0.6); }
+.dvcMapLegendDot--community{ background: #3b82f6; box-shadow: 0 0 4px rgba(59,130,246,0.6); }
 
 .dvcMapContainer {
   flex: 1;
@@ -1258,6 +1392,109 @@ a.dvcEventLocationLink:hover {
   transition: transform .15s;
 }
 .dvcMapMarker:hover { transform: scale(1.35); }
+
+/* Community marker (blue dot) */
+.dvcMapCommunityMarker {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid rgba(255,255,255,0.85);
+  box-shadow: 0 0 8px rgba(59,130,246,0.7);
+  cursor: pointer;
+  transition: transform .15s;
+}
+.dvcMapCommunityMarker:hover { transform: scale(1.35); }
+
+/* ── Community modal ─────────────────────────────────────────────────── */
+.dvcCommunityModalPanel {
+  max-width: 420px;
+}
+.dvcCommunityModalHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dvcCommunityModalLogoWrap {
+  flex-shrink: 0;
+  width: 64px; height: 64px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.dvcCommunityModalLogo {
+  width: 48px; height: 48px;
+  object-fit: contain;
+}
+.dvcCommunityModalEmoji {
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--dvc-btc);
+}
+.dvcCommunityModalMeta {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.dvcCommunityModalName {
+  font-size: 1.05rem; font-weight: 700;
+  color: var(--dvc-text);
+  margin: 0;
+}
+.dvcCommunityModalCity {
+  font-size: 0.8rem;
+  color: var(--dvc-muted);
+}
+.dvcCommunityModalSectionTitle {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--dvc-muted);
+  margin: 0 0 8px 0;
+}
+.dvcCommunityModalEvents {
+  margin-bottom: 20px;
+}
+.dvcCommunityModalEvent {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background .15s;
+  margin-bottom: 6px;
+}
+.dvcCommunityModalEvent:last-child { margin-bottom: 0; }
+.dvcCommunityModalEvent:hover { background: rgba(255,255,255,0.08); }
+.dvcCommunityModalEventDate {
+  flex-shrink: 0;
+  font-size: 0.72rem; font-weight: 700;
+  color: var(--dvc-btc);
+  min-width: 44px;
+}
+.dvcCommunityModalEventInfo {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.dvcCommunityModalEventTitle {
+  font-size: 0.82rem; font-weight: 500;
+  color: var(--dvc-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dvcCommunityModalEventTime {
+  font-size: 0.72rem; color: var(--dvc-muted);
+}
+.dvcCommunityModalJoin {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 18px;
+}
+.dvcCommunityModalJoinNote {
+  font-size: 0.8rem; color: var(--dvc-muted);
+  margin: 0 0 12px 0;
+}
+.dvcCommunityModalJoinBtn {
+  width: 100%;
+  justify-content: center;
+}
 
 /* ── Info view ───────────────────────────────────────────────────────── */
 .dvcInfoView {
@@ -1314,4 +1551,258 @@ a.dvcEventLocationLink:hover {
   background: var(--dvc-btc);
   border-radius: 0 0 2px 2px;
   box-shadow: 0 0 8px rgba(247,147,26,0.6);
+}
+
+/* ── Úvod view ───────────────────────────────────────────────────────── */
+.dvcUvodView {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-top: 8px;
+}
+
+.dvcUvodHeader {
+  text-align: center;
+  padding: 20px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.dvcUvodLogo {
+  max-height: 52px;
+  width: auto;
+  object-fit: contain;
+  /* SVG from WP may have white elements — force visibility on dark bg */
+  filter: drop-shadow(0 0 1px rgba(255,255,255,0.1));
+}
+
+.dvcUvodTagline {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--dvc-muted);
+  font-family: 'Roboto', system-ui, sans-serif;
+}
+
+.dvcUvodSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dvcUvodSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.dvcUvodSectionTitle {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dvc-btc);
+  margin: 0;
+}
+
+a.dvcUvodSectionMore {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--dvc-muted);
+  border-bottom: none;
+  text-decoration: none;
+  transition: color .15s;
+}
+a.dvcUvodSectionMore:hover { color: var(--dvc-text); }
+
+/* Kde začať card */
+.dvcKdeZacat {
+  background: var(--dvc-surface);
+  border: 1px solid var(--dvc-glass-border);
+  border-radius: var(--dvc-radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dvcKdeZacat .dvcMuted { margin: 0; }
+
+/* Feature grid */
+.dvcFeatureGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 600px) { .dvcFeatureGrid { grid-template-columns: repeat(3, 1fr); } }
+.dvcFeatureCard {
+  background: var(--dvc-surface);
+  border: 1px solid var(--dvc-glass-border);
+  border-radius: var(--dvc-radius-sm);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dvcFeatureIcon {
+  font-size: 1.35rem;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.dvcFeatureName {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--dvc-text);
+}
+.dvcFeatureDesc {
+  font-size: 0.72rem;
+  color: var(--dvc-muted);
+  line-height: 1.45;
+}
+
+/* Articles */
+.dvcArticleList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+a.dvcArticleCard {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--dvc-surface);
+  border: 1px solid var(--dvc-glass-border);
+  border-bottom: 1px solid var(--dvc-glass-border);
+  border-radius: var(--dvc-radius-sm);
+  text-decoration: none;
+  color: var(--dvc-text);
+  transition: background .15s, border-color .15s;
+}
+a.dvcArticleCard:hover {
+  background: rgba(247,147,26,0.05);
+  border-color: rgba(247,147,26,0.2);
+  color: var(--dvc-text);
+}
+
+.dvcArticleImg {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+}
+.dvcArticleImg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.dvcArticleBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dvcArticleTitle {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--dvc-ink);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dvcArticleDate {
+  font-size: 0.73rem;
+  color: var(--dvc-muted-2);
+  font-family: 'Roboto', system-ui, sans-serif;
+}
+
+/* Tools grid */
+.dvcToolGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 480px) { .dvcToolGrid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 720px) { .dvcToolGrid { grid-template-columns: repeat(4, 1fr); } }
+
+a.dvcToolCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 18px 10px 14px;
+  background: var(--dvc-surface);
+  border: 1px solid var(--dvc-glass-border);
+  border-bottom: 1px solid var(--dvc-glass-border);
+  border-radius: var(--dvc-radius-sm);
+  text-decoration: none;
+  color: var(--dvc-text);
+  transition: background .15s, border-color .15s, transform .12s;
+}
+a.dvcToolCard:hover {
+  background: rgba(247,147,26,0.06);
+  border-color: rgba(247,147,26,0.25);
+  color: var(--dvc-text);
+  transform: translateY(-2px);
+}
+
+.dvcToolIconWrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+.dvcToolLogoImg {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+}
+
+.dvcToolEmoji {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.dvcToolLogoPulse {
+  color: var(--dvc-btc);
+  animation: dvcPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes dvcPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.dvcToolName {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--dvc-ink);
+  line-height: 1.2;
+  width: 100%;
+}
+
+.dvcToolDesc {
+  font-size: 0.69rem;
+  color: var(--dvc-muted-2);
+  font-family: 'Roboto', system-ui, sans-serif;
+  line-height: 1.35;
+  width: 100%;
 }

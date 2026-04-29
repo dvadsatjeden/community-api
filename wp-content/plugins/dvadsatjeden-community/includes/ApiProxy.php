@@ -72,6 +72,31 @@ final class ApiProxy
             },
         ]);
 
+        register_rest_route('dvadsatjeden/v1', '/communities', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => static function () {
+                $file = WP_PLUGIN_DIR . '/community-map/includes/import-data.php';
+                if (!file_exists($file)) {
+                    return rest_ensure_response(['items' => []]);
+                }
+                $data = include $file;
+                if (!is_array($data)) {
+                    return rest_ensure_response(['items' => []]);
+                }
+                $items = array_values(array_map(static function (array $item): array {
+                    return [
+                        'name'         => (string) ($item['name'] ?? ''),
+                        'url'          => (string) ($item['url'] ?? ''),
+                        'lat'          => (float) ($item['lat'] ?? 0),
+                        'lng'          => (float) ($item['lng'] ?? 0),
+                        'marker_image' => (string) ($item['marker_image'] ?? ''),
+                    ];
+                }, $data));
+                return rest_ensure_response(['items' => $items]);
+            },
+        ]);
+
         register_rest_route('dvadsatjeden/v1', '/calendar-events', [
             'methods' => 'GET',
             'permission_callback' => '__return_true',
