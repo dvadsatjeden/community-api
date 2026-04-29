@@ -78,6 +78,14 @@ const App = (): ReactElement => {
   const dvcRsvpQuery = useMemo(() => allDvcRsvp(dvc), [dvc]);
 
   const [apiBaseUrl, setApiBaseUrl] = useState("");
+  const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+  const [pushFeature, setPushFeature] = useState(false);
+  const [pushStatus, setPushStatus] = useState<"unknown" | "subscribed" | "denied" | "unsupported">(() => {
+    if (typeof Notification === "undefined" || !("serviceWorker" in navigator)) return "unsupported";
+    if (Notification.permission === "denied") return "denied";
+    return "unknown";
+  });
+  const [pushLoading, setPushLoading] = useState(false);
   const [configUrl, setConfigUrl] = useState(() => {
     const el = document.getElementById("dvadsatjeden-community-app");
     return el?.dataset.configUrl ?? "/wp-json/dvadsatjeden/v1/config";
@@ -249,14 +257,12 @@ const App = (): ReactElement => {
       .then((cfg) => {
         if (typeof cfg.apiBaseUrl === "string" && cfg.apiBaseUrl.length > 0) {
           setApiBaseUrl(cfg.apiBaseUrl);
-          return;
+        } else {
+          const mount = document.getElementById("dvadsatjeden-community-app");
+          setApiBaseUrl(mount?.dataset.apiBaseUrl ?? DEFAULT_API_BASE_URL);
         }
-        const mount = document.getElementById("dvadsatjeden-community-app");
-        if (!cfg.apiBaseUrl && mount?.dataset.apiBaseUrl) {
-          setApiBaseUrl(mount.dataset.apiBaseUrl);
-          return;
-        }
-        setApiBaseUrl(DEFAULT_API_BASE_URL);
+        if (typeof cfg.vapidPublicKey === "string") setVapidPublicKey(cfg.vapidPublicKey);
+        if (cfg.features?.push === true) setPushFeature(true);
       })
       .catch(() => setApiBaseUrl(DEFAULT_API_BASE_URL));
   }, [configUrl]);
@@ -515,6 +521,62 @@ const App = (): ReactElement => {
     }
   }, [view, events]);
 
+  // ── Push notifications ───────────────────────────────────────────────────
+
+  const urlB64ToUint8Array = (b64: string): Uint8Array => {
+    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  };
+
+  useEffect(() => {
+    if (pushStatus === "unsupported" || !vapidPublicKey) return;
+    void navigator.serviceWorker.ready.then(async (reg) => {
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) setPushStatus("subscribed");
+    });
+  }, [vapidPublicKey, pushStatus]);
+
+  const subscribePush = async (): Promise<void> => {
+    if (!vapidPublicKey || !apiBaseUrl) return;
+    setPushLoading(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") { setPushStatus("denied"); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(vapidPublicKey) as unknown as string,
+      });
+      await fetch(`${apiBaseUrl}/v1/push/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sub.toJSON()),
+      });
+      setPushStatus("subscribed");
+    } catch { /* user cancelled or error */ }
+    finally { setPushLoading(false); }
+  };
+
+  const unsubscribePush = async (): Promise<void> => {
+    if (!apiBaseUrl) return;
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch(`${apiBaseUrl}/v1/push/subscribe`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      setPushStatus("unknown");
+    } catch { /* ignore */ }
+    finally { setPushLoading(false); }
+  };
+
   const copySeed = async (): Promise<void> => {
     if (!account) return;
     try {
@@ -753,6 +815,28 @@ const App = (): ReactElement => {
         {/* ── Info view ── */}
         {view === "info" ? (
           <div className="dvcInfoView">
+            {pushFeature && pushStatus !== "unsupported" ? (
+              <div className="dvcCard" style={{ marginBottom: "12px" }}>
+                <h2 className="dvcCardTitle">Notifikácie</h2>
+                {pushStatus === "denied" ? (
+                  <p className="dvcMuted">Notifikácie sú zablokované v nastaveniach prehliadača.</p>
+                ) : pushStatus === "subscribed" ? (
+                  <div>
+                    <p className="dvcMuted" style={{ marginBottom: "10px" }}>Dostaneš upozornenie keď pribudnú nové eventy.</p>
+                    <button className="dvcBtn dvcBtn--ghost" type="button" disabled={pushLoading} onClick={() => void unsubscribePush()}>
+                      {pushLoading ? "…" : "Vypnúť notifikácie"}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="dvcMuted" style={{ marginBottom: "10px" }}>Zapni upozornenia na nové Bitcoin eventy.</p>
+                    <button className="dvcBtn" type="button" disabled={pushLoading} onClick={() => void subscribePush()}>
+                      {pushLoading ? "…" : "🔔 Povoliť notifikácie"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
             <div className="dvcCard dvcCard--accent">
               <h2 className="dvcCardTitle">O aplikácii</h2>
               <p className="dvcMuted" style={{ marginBottom: "10px" }}>Komunitná aplikácia pre Bitcoinerov na Slovensku a v Česku. Sleduj eventy, pridaj sa anonymne cez BIP-39 seed.</p>

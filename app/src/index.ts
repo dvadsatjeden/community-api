@@ -3,6 +3,7 @@ import cors from "cors";
 import type { NextFunction, Request, Response } from "express";
 import { getRawEvents, importEventsFromSource, isEventsCacheEmpty, selectEvents } from "./modules/events/events.controller";
 import { getCachedCoords } from "./modules/geocoding/geocoding";
+import { getSubscriptionCount, getVapidPublicKey, removeSubscription, saveSubscription, sendTestNotification } from "./modules/push/push";
 import { listVenues } from "./modules/map/map.controller";
 import { getImportStatus, markImport, markImportError } from "./modules/import/import-status.controller";
 import { getMyRsvp, getRsvpCounts, removeRsvp, submitRsvp } from "./modules/rsvp/rsvp.controller";
@@ -74,7 +75,8 @@ app.get("/health", (_req, res) => {
 app.get("/v1/config", (_req, res) => {
   res.json({
     apiBaseUrl: "https://api.dvadsatjeden.org",
-    features: { events: true, map: true, push: false },
+    features: { events: true, map: true, push: !!getVapidPublicKey() },
+    vapidPublicKey: getVapidPublicKey(),
     sources: {
       events: process.env.EVENTS_SOURCE_URL ?? "",
       venues: "",
@@ -111,6 +113,33 @@ app.get("/v1/events", async (req, res) => {
 
 app.get("/v1/venues", (_req, res) => {
   res.json({ items: listVenues() });
+});
+
+app.post("/v1/push/subscribe", (req, res) => {
+  const sub = req.body as { endpoint?: string; keys?: unknown };
+  if (!sub?.endpoint || !sub?.keys) {
+    return res.status(400).json({ error: "Invalid push subscription object" });
+  }
+  saveSubscription(sub as Parameters<typeof saveSubscription>[0]);
+  return res.status(201).json({ ok: true, subscribers: getSubscriptionCount() });
+});
+
+app.delete("/v1/push/subscribe", (req, res) => {
+  const { endpoint } = req.body as { endpoint?: string };
+  if (!endpoint) return res.status(400).json({ error: "endpoint required" });
+  removeSubscription(endpoint);
+  return res.status(200).json({ ok: true });
+});
+
+app.post("/v1/push/test", requireImportSecret, async (req, res) => {
+  const sub = req.body?.subscription as Parameters<typeof sendTestNotification>[0] | undefined;
+  if (!sub) return res.status(400).json({ error: "subscription required" });
+  try {
+    await sendTestNotification(sub);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+  }
 });
 
 app.get("/v1/rsvp/:eventId/counts", (req, res) => {

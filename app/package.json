@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^22.15.30",
+    "@types/web-push": "^3.6.4",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.1.5"

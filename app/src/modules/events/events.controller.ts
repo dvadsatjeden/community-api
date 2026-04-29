@@ -1,5 +1,6 @@
 import type { EventItem } from "../contracts";
 import { scheduleGeocoding } from "../geocoding/geocoding";
+import { notifyNewEvents } from "../push/push";
 
 const fallbackEvents: EventItem[] = [
   {
@@ -257,5 +258,6 @@ export const importEventsFromSource = async (sourceUrl = SOURCE_URL_DEFAULT): Pr
   cachedEvents = normalized;
   const addresses = normalized.map((e) => e.locationName).filter((a): a is string => !!a);
   scheduleGeocoding(addresses);
+  void notifyNewEvents(normalized);
   return normalized.length;
 };

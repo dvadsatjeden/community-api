@@ -17,6 +17,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
       injectRegister: "auto",
       manifest: {
@@ -37,17 +40,6 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,wasm}"],
         navigateFallback: "/index-standalone.html",
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.dvadsatjeden\.org\/v1\//,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 8,
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 },
-            },
-          },
-        ],
       },
     }),
   ],
