@@ -40,6 +40,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,wasm}"],
         navigateFallback: "/index-standalone.html",
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
       },
     }),
   ],
