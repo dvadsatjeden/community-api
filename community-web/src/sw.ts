@@ -1,9 +1,13 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute } from "workbox-precaching";
+import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
+import { clientsClaim, skipWaiting } from "workbox-core";
 
 declare const self: ServiceWorkerGlobalScope;
 
 precacheAndRoute(self.__WB_MANIFEST);
+cleanupOutdatedCaches();
+skipWaiting();
+clientsClaim();
 
 interface PushPayload {
   title: string;
