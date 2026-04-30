@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Dvadsatjeden Community
  * Description: Integracia komunitnej PWA aplikacie pre dvadsatjeden.org.
- * Version: 0.9.0
+ * Version: 0.9.1
  * Author: Dvadsatjeden
  */
 if (!defined('ABSPATH')) {
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 if (!defined('DVC_COMMUNITY_VERSION')) {
-    define('DVC_COMMUNITY_VERSION', '0.9.0');
+    define('DVC_COMMUNITY_VERSION', '0.9.1');
 }
 
 if (!defined('DVC_COMMUNITY_DIR')) {

@@ -173,6 +173,17 @@
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+.dvcCardTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+.dvcCardTitleRow .dvcCardTitle {
+  margin: 0;
+}
+
 .dvcCardTitle {
   font-family: 'Poppins', system-ui, sans-serif;
   margin: 0 0 4px;
@@ -523,6 +534,10 @@
 
 /* ── Buttons ─────────────────────────────────────────────────────────── */
 .dvcBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   border: 1px solid var(--dvc-border-strong);
   background: rgba(255, 255, 255, 0.06);
   color: var(--dvc-text);
@@ -568,6 +583,22 @@
   padding: 5px 12px;
   font-size: 0.75rem;
   border-radius: 999px;
+  min-height: unset;
+}
+
+.dvcBtn--add {
+  padding: 5px 13px;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  min-height: unset;
+  flex-shrink: 0;
+  background: rgba(247, 147, 26, 0.1) !important;
+  color: var(--dvc-btc) !important;
+  border-color: rgba(247, 147, 26, 0.3) !important;
+  font-weight: 700;
+}
+.dvcBtn--add:hover {
+  background: rgba(247, 147, 26, 0.2) !important;
 }
 
 .dvcBtn--rsvp {
