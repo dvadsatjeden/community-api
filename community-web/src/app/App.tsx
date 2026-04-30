@@ -134,40 +134,26 @@ const CommunityLogo = ({ community }: { community: Community }): ReactElement =>
   return <img key={urls[attempt]} src={urls[attempt]} onError={() => setAttempt((a) => a + 1)} className="dvcCommunityModalLogo" alt="" />;
 };
 
-const IDB_NAME = "d21-storage";
-const IDB_STORE = "kv";
+type StoredAccount = Omit<DerivedAccount, "mnemonic">;
 
-function idbOpen(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = (e) =>
-      (e.target as IDBOpenDBRequest).result.createObjectStore(IDB_STORE);
-    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbGetAccount(): Promise<DerivedAccount | null> {
+function loadAccountFromStorage(): DerivedAccount | null {
   try {
-    const db = await idbOpen();
-    return new Promise((resolve) => {
-      const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get("account");
-      req.onsuccess = () => resolve((req.result as DerivedAccount) ?? null);
-      req.onerror = () => resolve(null);
-    });
+    const raw = localStorage.getItem("d21.account");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<DerivedAccount>;
+    if (!parsed.ownerId || !parsed.rsvpToken) return null;
+    // Migration: old format stored mnemonic — strip it, resave clean
+    if (parsed.mnemonic) {
+      const { mnemonic: _, ...clean } = parsed as DerivedAccount;
+      localStorage.setItem("d21.account", JSON.stringify(clean));
+    }
+    return { ownerId: parsed.ownerId, rsvpToken: parsed.rsvpToken, dataKey: parsed.dataKey ?? "", mnemonic: "" };
   } catch { return null; }
 }
 
-async function idbSetAccount(account: DerivedAccount | null): Promise<void> {
-  try {
-    const db = await idbOpen();
-    await new Promise<void>((resolve) => {
-      const store = db.transaction(IDB_STORE, "readwrite").objectStore(IDB_STORE);
-      const req = account ? store.put(account, "account") : store.delete("account");
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
-  } catch { /* silent fail */ }
+function saveAccountToStorage(account: DerivedAccount): void {
+  const { mnemonic: _, ...storable } = account;
+  localStorage.setItem("d21.account", JSON.stringify(storable));
 }
 
 const App = (): ReactElement => {
@@ -202,10 +188,7 @@ const App = (): ReactElement => {
   const [filterMine, setFilterMine] = useState(false);
   const [mnemonicInput, setMnemonicInput] = useState("");
   const [suggestedSeed] = useState(() => generateMnemonic());
-  const [account, setAccount] = useState<DerivedAccount | null>(() => {
-    const fromStorage = localStorage.getItem("d21.account");
-    return fromStorage ? (JSON.parse(fromStorage) as DerivedAccount) : null;
-  });
+  const [account, setAccount] = useState<DerivedAccount | null>(() => loadAccountFromStorage());
   const [evoluReady, setEvoluReady] = useState(false);
   const [evoluError, setEvoluError] = useState<string | null>(null);
   const [isEvoluConnecting, setIsEvoluConnecting] = useState(false);
@@ -305,19 +288,8 @@ const App = (): ReactElement => {
   );
 
   useEffect(() => {
-    const fromLS = localStorage.getItem("d21.account");
-    if (fromLS) {
-      setIsAccountModalOpen(false);
-      return;
-    }
-    void idbGetAccount().then((fromIDB) => {
-      if (fromIDB) {
-        localStorage.setItem("d21.account", JSON.stringify(fromIDB));
-        setAccount(fromIDB);
-      } else {
-        setIsAccountModalOpen(true);
-      }
-    });
+    if (navigator.storage?.persist) void navigator.storage.persist();
+    if (!loadAccountFromStorage()) setIsAccountModalOpen(true);
   }, []);
 
   useEffect(() => {
@@ -332,7 +304,13 @@ const App = (): ReactElement => {
       return;
     }
     setLocalRsvpByEvent(loadLocalRsvpMap(account.ownerId));
-    void syncEvolu(account.mnemonic);
+    if (account.mnemonic) {
+      // Fresh session: seed just entered — restore Evolu owner and sync from relay
+      void syncEvolu(account.mnemonic);
+    } else {
+      // Returning session: Evolu already has owner in its own persistent storage
+      setEvoluReady(true);
+    }
   }, [account, syncEvolu, loadLocalRsvpMap]);
 
   useEffect(() => {
@@ -534,8 +512,7 @@ const App = (): ReactElement => {
   const createAccount = (): void => {
     const next = deriveFromMnemonic(suggestedSeed);
     setAccount(next);
-    localStorage.setItem("d21.account", JSON.stringify(next));
-    void idbSetAccount(next);
+    saveAccountToStorage(next);
     setIsAccountModalOpen(false);
   };
 
@@ -547,14 +524,12 @@ const App = (): ReactElement => {
     setMnemonicError(null);
     const restored = deriveFromMnemonic(mnemonicInput);
     setAccount(restored);
-    localStorage.setItem("d21.account", JSON.stringify(restored));
-    void idbSetAccount(restored);
+    saveAccountToStorage(restored);
     setIsAccountModalOpen(false);
   };
 
   const resetAccountOnDevice = (): void => {
     localStorage.removeItem("d21.account");
-    void idbSetAccount(null);
     setAccount(null);
     setMnemonicInput("");
     setMyRsvpByEvent(new Map());
@@ -1486,30 +1461,38 @@ const App = (): ReactElement => {
 
                     <div>
                       <div className="dvcLabel">Záloha — 12 slov (nikomu neposielaj)</div>
-                      <div className="dvcRow" style={{ marginBottom: "10px" }}>
-                        <button className="dvcBtn dvcBtnGhost" type="button" onClick={() => setIsSeedVisible((v) => !v)}>
-                          {isSeedVisible ? "Skryť seed" : "Zobraziť seed"}
-                        </button>
-                        {isSeedVisible ? (
-                          <button className="dvcBtn" type="button" onClick={() => void copySeed()}>
-                            Kopírovať seed
-                          </button>
-                        ) : null}
-                        {seedCopied ? <span className="dvcPill dvcPill--ok">Skopírované</span> : null}
-                      </div>
-                      {isSeedVisible ? (
-                        <div className="dvcSeedBlock">
-                          <SeedTable mnemonic={account.mnemonic} />
-                        </div>
-                      ) : null}
+                      {account.mnemonic ? (
+                        <>
+                          <div className="dvcRow" style={{ marginBottom: "10px" }}>
+                            <button className="dvcBtn dvcBtnGhost" type="button" onClick={() => setIsSeedVisible((v) => !v)}>
+                              {isSeedVisible ? "Skryť seed" : "Zobraziť seed"}
+                            </button>
+                            {isSeedVisible ? (
+                              <button className="dvcBtn" type="button" onClick={() => void copySeed()}>
+                                Kopírovať seed
+                              </button>
+                            ) : null}
+                            {seedCopied ? <span className="dvcPill dvcPill--ok">Skopírované</span> : null}
+                          </div>
+                          {isSeedVisible ? (
+                            <div className="dvcSeedBlock">
+                              <SeedTable mnemonic={account.mnemonic} />
+                            </div>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className="dvcMuted dvcMuted--sm">Seed nie je v pamäti tejto relácie. Ak potrebuješ zálohu, odhláš sa a obnov účet zadaním 12 slov.</p>
+                      )}
                     </div>
 
                     {evoluError ? (
                       <div className="dvcRow">
                         <span className="dvcPill dvcPill--wait">{evoluError}</span>
-                        <button className="dvcBtn" type="button" onClick={() => void syncEvolu(account.mnemonic)}>
-                          Skúsiť znova
-                        </button>
+                        {account.mnemonic ? (
+                          <button className="dvcBtn" type="button" onClick={() => void syncEvolu(account.mnemonic)}>
+                            Skúsiť znova
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
 
