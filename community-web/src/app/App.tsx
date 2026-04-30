@@ -246,6 +246,7 @@ const App = (): ReactElement => {
   const [isSeedVisible, setIsSeedVisible] = useState(false);
   const [seedCopied, setSeedCopied] = useState(false);
   const [accountResetNotice, setAccountResetNotice] = useState<string | null>(null);
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [mnemonicError, setMnemonicError] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
@@ -341,6 +342,14 @@ const App = (): ReactElement => {
       } else {
         setIsAccountModalOpen(true);
       }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const prevController = navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (prevController) setNewVersionAvailable(true);
     });
   }, []);
 
@@ -1575,6 +1584,14 @@ const App = (): ReactElement => {
         {accountResetNotice ? (
           <div className="dvcToast">
             <span className="dvcPill dvcPill--ok">{accountResetNotice}</span>
+          </div>
+        ) : null}
+        {newVersionAvailable ? (
+          <div className="dvcToast dvcToast--update">
+            <span className="dvcUpdateNotice">Nová verzia je dostupná</span>
+            <button className="dvcBtn dvcBtn--add" type="button" onClick={() => window.location.reload()}>
+              Načítať
+            </button>
           </div>
         ) : null}
       </div>

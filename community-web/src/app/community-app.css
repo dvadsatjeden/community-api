@@ -1187,6 +1187,20 @@ a.dvcEventLocationLink:hover {
   from { opacity: 0; transform: translateX(-50%) translateY(12px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+.dvcToast--update {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1a1d21;
+  border: 1px solid rgba(247, 147, 26, 0.35);
+  border-radius: var(--dvc-radius-sm);
+  padding: 10px 14px;
+}
+.dvcUpdateNotice {
+  font-size: 0.82rem;
+  color: var(--dvc-text);
+  white-space: nowrap;
+}
 
 /* ── Misc ────────────────────────────────────────────────────────────── */
 .dvc h3 { font-size: inherit; font-weight: inherit; margin: 0; }
