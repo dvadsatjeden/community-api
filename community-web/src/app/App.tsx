@@ -136,6 +136,43 @@ const CommunityLogo = ({ community }: { community: Community }): ReactElement =>
 
 type StoredAccount = Omit<DerivedAccount, "mnemonic">;
 
+// ── IndexedDB backup (survives localStorage eviction) ──────────────────────
+const IDB_NAME = "d21-storage";
+const IDB_STORE = "kv";
+
+function idbOpen(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = (e) => (e.target as IDBOpenDBRequest).result.createObjectStore(IDB_STORE);
+    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGetAccount(): Promise<StoredAccount | null> {
+  try {
+    const db = await idbOpen();
+    return new Promise((resolve) => {
+      const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get("account");
+      req.onsuccess = () => resolve((req.result as StoredAccount) ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function idbSetAccount(account: StoredAccount | null): Promise<void> {
+  try {
+    const db = await idbOpen();
+    await new Promise<void>((resolve) => {
+      const store = db.transaction(IDB_STORE, "readwrite").objectStore(IDB_STORE);
+      const req = account ? store.put(account, "account") : store.delete("account");
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+    });
+  } catch { /* silent fail */ }
+}
+// ──────────────────────────────────────────────────────────────────────────
+
 function loadAccountFromStorage(): DerivedAccount | null {
   try {
     const raw = localStorage.getItem("d21.account");
@@ -144,16 +181,23 @@ function loadAccountFromStorage(): DerivedAccount | null {
     if (!parsed.ownerId || !parsed.rsvpToken) return null;
     // Migration: old format stored mnemonic — strip it, resave clean
     if (parsed.mnemonic) {
-      const { mnemonic: _, ...clean } = parsed as DerivedAccount;
-      localStorage.setItem("d21.account", JSON.stringify(clean));
+      try {
+        const { mnemonic: _, ...clean } = parsed as DerivedAccount;
+        localStorage.setItem("d21.account", JSON.stringify(clean));
+      } catch { /* write-back failure is non-fatal; proceed with the parsed account */ }
     }
     return { ownerId: parsed.ownerId, rsvpToken: parsed.rsvpToken, dataKey: parsed.dataKey ?? "", mnemonic: "" };
   } catch { return null; }
 }
 
-function saveAccountToStorage(account: DerivedAccount): void {
+/** Returns true on success, false if localStorage.setItem threw (QuotaExceededError etc.). */
+function saveAccountToStorage(account: DerivedAccount): boolean {
   const { mnemonic: _, ...storable } = account;
-  localStorage.setItem("d21.account", JSON.stringify(storable));
+  try {
+    localStorage.setItem("d21.account", JSON.stringify(storable));
+  } catch { return false; }
+  void idbSetAccount(storable);
+  return true;
 }
 
 const App = (): ReactElement => {
@@ -289,7 +333,15 @@ const App = (): ReactElement => {
 
   useEffect(() => {
     if (navigator.storage?.persist) void navigator.storage.persist();
-    if (!loadAccountFromStorage()) setIsAccountModalOpen(true);
+    if (loadAccountFromStorage()) return;
+    void idbGetAccount().then((fromIDB) => {
+      if (fromIDB) {
+        try { localStorage.setItem("d21.account", JSON.stringify(fromIDB)); } catch { /* non-fatal */ }
+        setAccount({ ...fromIDB, mnemonic: "" });
+      } else {
+        setIsAccountModalOpen(true);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -512,7 +564,10 @@ const App = (): ReactElement => {
   const createAccount = (): void => {
     const next = deriveFromMnemonic(suggestedSeed);
     setAccount(next);
-    saveAccountToStorage(next);
+    if (!saveAccountToStorage(next)) {
+      setAccountResetNotice("Upozornenie: účet sa nepodarilo uložiť — pri ďalšom načítaní bude potrebné zadať seed znova.");
+      window.setTimeout(() => setAccountResetNotice(null), 5000);
+    }
     setIsAccountModalOpen(false);
   };
 
@@ -524,12 +579,16 @@ const App = (): ReactElement => {
     setMnemonicError(null);
     const restored = deriveFromMnemonic(mnemonicInput);
     setAccount(restored);
-    saveAccountToStorage(restored);
+    if (!saveAccountToStorage(restored)) {
+      setAccountResetNotice("Upozornenie: účet sa nepodarilo uložiť — pri ďalšom načítaní bude potrebné zadať seed znova.");
+      window.setTimeout(() => setAccountResetNotice(null), 5000);
+    }
     setIsAccountModalOpen(false);
   };
 
   const resetAccountOnDevice = (): void => {
     localStorage.removeItem("d21.account");
+    void idbSetAccount(null);
     setAccount(null);
     setMnemonicInput("");
     setMyRsvpByEvent(new Map());
