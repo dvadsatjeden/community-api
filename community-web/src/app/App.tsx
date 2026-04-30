@@ -134,6 +134,42 @@ const CommunityLogo = ({ community }: { community: Community }): ReactElement =>
   return <img key={urls[attempt]} src={urls[attempt]} onError={() => setAttempt((a) => a + 1)} className="dvcCommunityModalLogo" alt="" />;
 };
 
+const IDB_NAME = "d21-storage";
+const IDB_STORE = "kv";
+
+function idbOpen(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = (e) =>
+      (e.target as IDBOpenDBRequest).result.createObjectStore(IDB_STORE);
+    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGetAccount(): Promise<DerivedAccount | null> {
+  try {
+    const db = await idbOpen();
+    return new Promise((resolve) => {
+      const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get("account");
+      req.onsuccess = () => resolve((req.result as DerivedAccount) ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function idbSetAccount(account: DerivedAccount | null): Promise<void> {
+  try {
+    const db = await idbOpen();
+    await new Promise<void>((resolve) => {
+      const store = db.transaction(IDB_STORE, "readwrite").objectStore(IDB_STORE);
+      const req = account ? store.put(account, "account") : store.delete("account");
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+    });
+  } catch { /* silent fail */ }
+}
+
 const App = (): ReactElement => {
   const dvc = useDvcEvolu();
   const dvcRsvpQuery = useMemo(() => allDvcRsvp(dvc), [dvc]);
@@ -183,7 +219,7 @@ const App = (): ReactElement => {
   const [isSeedVisible, setIsSeedVisible] = useState(false);
   const [seedCopied, setSeedCopied] = useState(false);
   const [accountResetNotice, setAccountResetNotice] = useState<string | null>(null);
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState(() => !localStorage.getItem("d21.account"));
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [mnemonicError, setMnemonicError] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
   const [communityDetail, setCommunityDetail] = useState<Community | null>(null);
@@ -267,6 +303,22 @@ const App = (): ReactElement => {
     },
     [dvc]
   );
+
+  useEffect(() => {
+    const fromLS = localStorage.getItem("d21.account");
+    if (fromLS) {
+      setIsAccountModalOpen(false);
+      return;
+    }
+    void idbGetAccount().then((fromIDB) => {
+      if (fromIDB) {
+        localStorage.setItem("d21.account", JSON.stringify(fromIDB));
+        setAccount(fromIDB);
+      } else {
+        setIsAccountModalOpen(true);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!account) {
@@ -483,6 +535,7 @@ const App = (): ReactElement => {
     const next = deriveFromMnemonic(suggestedSeed);
     setAccount(next);
     localStorage.setItem("d21.account", JSON.stringify(next));
+    void idbSetAccount(next);
     setIsAccountModalOpen(false);
   };
 
@@ -495,11 +548,13 @@ const App = (): ReactElement => {
     const restored = deriveFromMnemonic(mnemonicInput);
     setAccount(restored);
     localStorage.setItem("d21.account", JSON.stringify(restored));
+    void idbSetAccount(restored);
     setIsAccountModalOpen(false);
   };
 
   const resetAccountOnDevice = (): void => {
     localStorage.removeItem("d21.account");
+    void idbSetAccount(null);
     setAccount(null);
     setMnemonicInput("");
     setMyRsvpByEvent(new Map());
@@ -775,7 +830,10 @@ const App = (): ReactElement => {
         {view === "home" ? (<>
         <div className="dvcGrid dvcGrid--spaced">
           <div className="dvcCard dvcCard--wide dvcCard--events">
-            <h2 className="dvcCardTitle">Budúce udalosti</h2>
+            <div className="dvcCardTitleRow">
+              <h2 className="dvcCardTitle">Budúce udalosti</h2>
+              <a className="dvcBtn dvcBtn--add" href="https://prevadzky.dvadsatjeden.org/pridat/" target="_blank" rel="noreferrer">+ Pridať</a>
+            </div>
             <p className="dvcCardSubtitle">Nadchádzajúce meetupy, konferencie a stretnutia Bitcoinerov. Pridaj sa!</p>
             <div className="dvcFilters">
               <label className="dvcFilterItem">
@@ -1047,7 +1105,7 @@ const App = (): ReactElement => {
             <header className="dvcViewHeader">
               <h2 className="dvcViewTitle">Najbližšie udalosti</h2>
               <a
-                className="dvcBtn dvcBtnGhost dvcBtnSm"
+                className="dvcBtn dvcBtn--add"
                 href="https://prevadzky.dvadsatjeden.org/pridat/"
                 target="_blank"
                 rel="noreferrer"
