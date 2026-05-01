@@ -11,22 +11,30 @@ import {
 
 const SECRET = "test-nostr-auth-secret-for-vitest-only";
 
-type MockResponse = Response & { __body: unknown; statusCode: number };
+type MockResponse = Response & {
+  __body: unknown;
+  statusCode: number;
+  /** Lowercase header names (as returned by typical Express behavior). */
+  headers: Record<string, string>;
+};
 
 function mockRes(): MockResponse {
+  const headers: Record<string, string> = {};
   const res = {
     statusCode: 200,
     __body: null as unknown,
+    headers,
     status(code: number) {
-      this.statusCode = code;
-      return this;
+      res.statusCode = code;
+      return res;
     },
-    setHeader(_name: string, _value: string) {
-      return this;
+    setHeader(name: string, value: string) {
+      headers[name.toLowerCase()] = value;
+      return res;
     },
     json(payload: unknown) {
-      this.__body = payload;
-      return this;
+      res.__body = payload;
+      return res;
     },
   };
   return res as unknown as MockResponse;
@@ -68,6 +76,9 @@ describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
     const chRes = mockRes();
     await nostrAuthChallengeGet({} as Request, chRes);
     expect(chRes.statusCode).toBe(200);
+    expect(chRes.headers["cache-control"]).toBe("no-store");
+    expect(chRes.headers["pragma"]).toBe("no-cache");
+    expect(chRes.headers["expires"]).toBe("0");
     const ch = chRes.__body as { challengeId: string; kind: number };
     expect(ch.challengeId).toHaveLength(32);
     expect(ch.kind).toBe(NOSTR_AUTH_EVENT_KIND);
@@ -85,6 +96,9 @@ describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
     const vRes = mockRes();
     await nostrAuthVerifyPost({ body: { event } } as Request, vRes);
     expect(vRes.statusCode).toBe(200);
+    expect(vRes.headers["cache-control"]).toBe("no-store");
+    expect(vRes.headers["pragma"]).toBe("no-cache");
+    expect(vRes.headers["expires"]).toBe("0");
     const body = vRes.__body as {
       ownerId: string;
       rsvpToken: string;

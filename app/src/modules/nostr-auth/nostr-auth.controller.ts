@@ -25,6 +25,13 @@ function extractChallengeTag(event: Event): string | null {
   return null;
 }
 
+/** Prevent caches/proxies from storing one-time challenges or credentials. */
+function setNoStoreAuthHeaders(res: Response): void {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+}
+
 export async function nostrAuthChallengeGet(_req: Request, res: Response): Promise<void> {
   const secret = getSecret();
   if (!secret) {
@@ -32,9 +39,15 @@ export async function nostrAuthChallengeGet(_req: Request, res: Response): Promi
     return;
   }
   const challengeId = randomBytes(16).toString("hex");
-  const store = await getNostrChallengeStore();
-  await store.setChallenge(challengeId);
-  res.setHeader("Cache-Control", "no-store");
+  try {
+    const store = await getNostrChallengeStore();
+    await store.setChallenge(challengeId);
+  } catch (err) {
+    console.error("[nostr-auth] getNostrChallengeStore / setChallenge failed", { challengeId, err });
+    res.status(503).json({ error: "challenge_store_unavailable" });
+    return;
+  }
+  setNoStoreAuthHeaders(res);
   res.json({
     challengeId,
     kind: NOSTR_AUTH_EVENT_KIND,
@@ -78,8 +91,15 @@ export async function nostrAuthVerifyPost(req: Request, res: Response): Promise<
     return;
   }
 
-  const store = await getNostrChallengeStore();
-  const consumed = await store.consumeChallenge(challengeId);
+  let consumed: boolean;
+  try {
+    const store = await getNostrChallengeStore();
+    consumed = await store.consumeChallenge(challengeId);
+  } catch (err) {
+    console.error("[nostr-auth] getNostrChallengeStore / consumeChallenge failed", { challengeId, err });
+    res.status(503).json({ error: "challenge_store_unavailable" });
+    return;
+  }
   if (!consumed) {
     res.status(400).json({ error: "unknown_or_expired_challenge" });
     return;
@@ -99,6 +119,7 @@ export async function nostrAuthVerifyPost(req: Request, res: Response): Promise<
     } catch {
       npub = "";
     }
+    setNoStoreAuthHeaders(res);
     res.json({
       ownerId: cred.ownerId,
       rsvpToken: cred.rsvpToken,

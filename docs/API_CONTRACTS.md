@@ -83,6 +83,8 @@ Optional `REDIS_URL`: when set, auth challenges are stored in Redis with TTL (sh
   - `challengeId: string` — hex, single-use, expires in 5 minutes
   - `kind: number` — always `27241` (custom auth event kind)
   - `message: string` — human-readable hint for the signer UI
+  - Headers: `Cache-Control: no-store`, `Pragma: no-cache`, `Expires: 0` (nonce must not be cached)
+- Response `503`: `{ error: "challenge_store_unavailable" }` if the challenge store (e.g. Redis) fails
 
 ### `POST /v1/auth/nostr/verify`
 
@@ -99,7 +101,8 @@ Optional `REDIS_URL`: when set, auth challenges are stored in Redis with TTL (sh
   - `mnemonic: string` — 12 English BIP-39 words (Evolu `restoreAppOwner` secret; treat like a seed until user confirms backup and you clear it from storage)
   - `nostrPubkeyHex: string` — 64-char lowercase hex
   - `npub: string` — bech32 `npub1…` when encoding succeeds, else may be empty
-- Error responses: `400` with `{ error: string }` codes such as `invalid_event_signature`, `unknown_or_expired_challenge`, etc.; `503` if auth is not configured.
+  - Same non-cache headers as the challenge endpoint on success responses
+- Error responses: `400` with `{ error: string }` codes such as `invalid_event_signature`, `unknown_or_expired_challenge`, etc.; `503` with `nostr_auth_not_configured` or `challenge_store_unavailable` when applicable.
 
 ## WP handoff contract
 
