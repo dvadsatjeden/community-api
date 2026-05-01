@@ -34,6 +34,7 @@ export async function nostrAuthChallengeGet(_req: Request, res: Response): Promi
   const challengeId = randomBytes(16).toString("hex");
   const store = await getNostrChallengeStore();
   await store.setChallenge(challengeId);
+  res.setHeader("Cache-Control", "no-store");
   res.json({
     challengeId,
     kind: NOSTR_AUTH_EVENT_KIND,

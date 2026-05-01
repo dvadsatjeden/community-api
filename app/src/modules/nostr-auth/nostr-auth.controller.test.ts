@@ -21,6 +21,9 @@ function mockRes(): MockResponse {
       this.statusCode = code;
       return this;
     },
+    setHeader(_name: string, _value: string) {
+      return this;
+    },
     json(payload: unknown) {
       this.__body = payload;
       return this;
