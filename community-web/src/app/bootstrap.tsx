@@ -10,6 +10,8 @@ import "./community-app.css";
 declare global {
   interface Window {
     __DVC_APP__?: { bootedAt: string };
+    /** Cleared from App after first paint so boot watchdog can fire if React never mounts. */
+    __DVC_BOOT_TIMER?: ReturnType<typeof setTimeout>;
   }
 }
 
@@ -46,7 +48,7 @@ if (rootElement) {
     `;
   };
 
-  const bootTimer = window.setTimeout(() => {
+  window.__DVC_BOOT_TIMER = window.setTimeout(() => {
     if (rootElement.textContent?.includes("Načítavam appku")) {
       showBootFailure("Timeout: JS bundle sa nespustil (skript sa pravdepodobne nespustil alebo je zablokovaný).", {
         hint: "Hľadaj v Network: community-app.js (blocked/200).",
@@ -61,9 +63,11 @@ if (rootElement) {
         <App />
       </DvcEvoluProvider>
     );
-    window.clearTimeout(bootTimer);
   } catch (error) {
-    window.clearTimeout(bootTimer);
+    if (window.__DVC_BOOT_TIMER != null) {
+      window.clearTimeout(window.__DVC_BOOT_TIMER);
+      window.__DVC_BOOT_TIMER = undefined;
+    }
     showBootFailure("Výnimka pri štarte React aplikácie", error);
   }
 }
