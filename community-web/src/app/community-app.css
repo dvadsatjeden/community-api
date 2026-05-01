@@ -11,9 +11,9 @@
   --dvc-glass-border:   rgba(255, 255, 255, 0.10);
   --dvc-border:         rgba(255, 255, 255, 0.08);
   --dvc-border-strong:  rgba(255, 255, 255, 0.14);
-  --dvc-text:           #d8e0f0;
-  --dvc-muted:          rgba(185, 200, 230, 0.55);
-  --dvc-muted-2:        rgba(165, 182, 215, 0.38);
+  --dvc-text:           #e8eff9;
+  --dvc-muted:          rgba(200, 214, 240, 0.72);
+  --dvc-muted-2:        rgba(178, 195, 225, 0.52);
   --dvc-ink:            #eef2ff;
   /* Bitcoin orange */
   --dvc-btc:            #f7931a;
@@ -1217,8 +1217,9 @@ a.dvcEventLocationLink:hover {
   gap: 12px;
   padding: 10px 16px;
   padding-top: max(10px, env(safe-area-inset-top));
-  background: #1a1d21;
-  border-bottom: 1px solid rgba(247, 147, 26, 0.35);
+  background: #1e2228;
+  color: var(--dvc-ink);
+  border-bottom: 1px solid rgba(247, 147, 26, 0.45);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   animation: dvc-update-banner-in 0.28s ease-out;
 }
@@ -1233,9 +1234,10 @@ a.dvcEventLocationLink:hover {
   color: var(--dvc-accent, #f7931a);
 }
 .dvcUpdateBannerText {
-  font-size: 0.84rem;
-  line-height: 1.45;
-  color: var(--dvc-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--dvc-ink);
+  font-weight: 400;
   text-align: center;
   max-width: min(42rem, 100%);
 }
@@ -1245,20 +1247,20 @@ a.dvcEventLocationLink:hover {
 .dvcUpdateBannerBtn {
   flex-shrink: 0;
   cursor: pointer;
-  border: 1px solid rgba(247, 147, 26, 0.45);
+  border: 1px solid rgba(247, 147, 26, 0.55);
   border-radius: var(--dvc-radius-sm, 8px);
   padding: 8px 16px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--dvc-text);
-  background: rgba(247, 147, 26, 0.12);
+  color: var(--dvc-ink);
+  background: rgba(247, 147, 26, 0.18);
 }
 .dvcUpdateBannerBtn:focus-visible {
   box-shadow: var(--dvc-focus);
   outline: none;
 }
 .dvcUpdateBannerBtn:hover {
-  background: rgba(247, 147, 26, 0.22);
+  background: rgba(247, 147, 26, 0.28);
 }
 
 /* ── Misc ────────────────────────────────────────────────────────────── */

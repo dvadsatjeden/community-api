@@ -89,6 +89,20 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   return null;
 };
 
+/** WP/CDN často držia .json bez ?ver=; obídenie vlastného aj proxy cache pri kontrole aktualizácie. */
+const withVersionCheckCacheBust = (absoluteUrl: string): string => {
+  try {
+    const u = new URL(absoluteUrl);
+    u.searchParams.set("_cb", String(Date.now()));
+    return u.href;
+  } catch {
+    const sep = absoluteUrl.includes("?") ? "&" : "?";
+    return `${absoluteUrl}${sep}_cb=${Date.now()}`;
+  }
+};
+
+const LOCAL_BUNDLE_VERSION = String(__APP_VERSION__).trim();
+
 const statusPillLabel = (status: RsvpStatus | undefined): string | null => {
   if (status === "going") return "IDEM";
   if (status === "maybe") return "MOŽNO";
@@ -291,6 +305,25 @@ const App = (): ReactElement => {
     }
   }, []);
 
+  const runServerVersionCheck = useCallback((): void => {
+    const versionUrl = resolveCommunityAppVersionCheckUrl();
+    if (!versionUrl) return;
+    const fetchUrl = withVersionCheckCacheBust(versionUrl);
+    void fetch(fetchUrl, { cache: "no-store", credentials: "omit" })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const data = (await r.json()) as { version?: string };
+        const remoteVer = typeof data.version === "string" ? data.version.trim() : "";
+        if (!remoteVer) return;
+        if (remoteVer === LOCAL_BUNDLE_VERSION) {
+          setNewVersionAvailable(false);
+          return;
+        }
+        setNewVersionAvailable(true);
+      })
+      .catch(() => {});
+  }, []);
+
   const loadLocalRsvpMap = useCallback((ownerId: string): Map<string, RsvpStatus> => {
     try {
       const raw = localStorage.getItem(RSVP_LOCAL_KEY);
@@ -378,36 +411,27 @@ const App = (): ReactElement => {
   }, []);
 
   useEffect(() => {
-    const versionUrl = resolveCommunityAppVersionCheckUrl();
-    if (!versionUrl) return;
-    const check = (): void => {
-      void fetch(versionUrl, { cache: "no-store", credentials: "omit" })
-        .then(async (r) => {
-          if (!r.ok) return;
-          const data = (await r.json()) as { version?: string };
-          if (typeof data.version === "string" && data.version.length > 0 && data.version !== __APP_VERSION__) {
-            setNewVersionAvailable(true);
-          }
-        })
-        .catch(() => {});
-    };
-    check();
-    const intervalId = window.setInterval(check, 3 * 60 * 1000);
+    if (!resolveCommunityAppVersionCheckUrl()) return;
+    runServerVersionCheck();
+    const intervalId = window.setInterval(runServerVersionCheck, 3 * 60 * 1000);
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [runServerVersionCheck]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    const onUpdateFound = (): void => {
-      if (navigator.serviceWorker.controller != null) setNewVersionAvailable(true);
+    /** Nový SW môže pribúdať bez zmeny semver (hashe chunky) — pravdu berieme iba z `community-app.version.json`. */
+    let debounced: ReturnType<typeof setTimeout> | undefined;
+    const scheduleVersionRecheck = (): void => {
+      window.clearTimeout(debounced);
+      debounced = window.setTimeout(() => runServerVersionCheck(), 750);
     };
 
     let unregisterUpdateFound: (() => void) | undefined;
     void navigator.serviceWorker.getRegistration().then((reg) => {
       if (!reg) return;
-      reg.addEventListener("updatefound", onUpdateFound);
-      unregisterUpdateFound = () => reg.removeEventListener("updatefound", onUpdateFound);
+      reg.addEventListener("updatefound", scheduleVersionRecheck);
+      unregisterUpdateFound = () => reg.removeEventListener("updatefound", scheduleVersionRecheck);
     });
 
     const swUpdatePollId = window.setInterval(() => {
@@ -415,10 +439,11 @@ const App = (): ReactElement => {
     }, 30 * 60 * 1000);
 
     return () => {
+      window.clearTimeout(debounced);
       unregisterUpdateFound?.();
       window.clearInterval(swUpdatePollId);
     };
-  }, []);
+  }, [runServerVersionCheck]);
 
   useEffect(() => {
     if (!account) {
@@ -1729,19 +1754,7 @@ const App = (): ReactElement => {
               disabled={isReloading}
               onClick={() => {
                 setIsReloading(true);
-                void navigator.serviceWorker.getRegistration().then((reg) => {
-                  const sw = reg?.installing ?? reg?.waiting;
-                  if (sw) {
-                    sw.addEventListener("statechange", function handler(e) {
-                      if ((e.target as ServiceWorker).state === "activated") {
-                        sw.removeEventListener("statechange", handler);
-                        window.location.reload();
-                      }
-                    });
-                  } else {
-                    window.location.reload();
-                  }
-                });
+                window.location.reload();
               }}
             >
               {isReloading ? "Načítavam…" : "Načítať"}
