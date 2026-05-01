@@ -2,6 +2,8 @@ import { sha256 } from "@noble/hashes/sha256";
 import { generateMnemonic as generateBip39Mnemonic, validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 
+export type AuthMethod = "bip39" | "nostr";
+
 export type DerivedAccount = {
   mnemonic: string;
   ownerId: string;
@@ -9,6 +11,10 @@ export type DerivedAccount = {
   dataKey: string;
   /** Persistované: false = seed ešte uložený na zariadení, používateľ musí potvrdiť zálohu. */
   seedBackedUpConfirmed?: boolean;
+  /** `nostr` = identita z Nostr prihlásenia (owner/rsvp z API), BIP-39 slová pre Evolu z servera. */
+  authMethod?: AuthMethod;
+  /** Bech32 npub (zobrazenie / kontext zálohy). */
+  nostrPubkeyBech32?: string;
 };
 
 const textEncoder = new TextEncoder();

@@ -1934,3 +1934,100 @@ a.dvcToolCard:hover {
   line-height: 1.35;
   width: 100%;
 }
+
+/* Nostr sign-in (SATFLUX-style cards) */
+.dvcNostrModalPanel {
+  max-width: 440px;
+  max-height: min(90vh, 640px);
+  overflow-y: auto;
+}
+
+.dvcNostrMethodGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dvcNostrMethodBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 14px 12px;
+  border-radius: var(--dvc-radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+}
+.dvcNostrMethodBlock--warn {
+  border-color: rgba(247, 147, 26, 0.45);
+}
+
+.dvcNostrMethodBlock > .dvcNostrMethodIcon {
+  align-self: flex-start;
+}
+
+.dvcNostrMethodSubmit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.dvcNostrMethodCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 14px 12px;
+  border-radius: var(--dvc-radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--dvc-text);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  font: inherit;
+}
+.dvcNostrMethodCard:hover:not(:disabled) {
+  border-color: rgba(247, 147, 26, 0.35);
+  background: rgba(247, 147, 26, 0.06);
+}
+.dvcNostrMethodCard:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.dvcNostrMethodCard--warn {
+  border-color: rgba(247, 147, 26, 0.45);
+}
+
+.dvcNostrMethodIcon {
+  color: var(--dvc-btc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+.dvcNostrWarnSvg {
+  color: #fbbf24;
+}
+
+.dvcNostrMethodTitle {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--dvc-ink);
+}
+
+.dvcNostrMethodDesc {
+  font-size: 0.75rem;
+  color: var(--dvc-muted-2);
+  line-height: 1.35;
+}
+.dvcNostrMethodDesc--warn {
+  color: #fbbf24;
+}
+
+.dvcNostrBunkerInput,
+.dvcNostrNsecInput {
+  width: 100%;
+}
