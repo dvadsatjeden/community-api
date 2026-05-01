@@ -1203,8 +1203,8 @@ a.dvcEventLocationLink:hover {
   color: var(--dvc-text);
 }
 
-/* Top banner: nová verzia (WordPress aj standalone; zarovnanie s jednadvacet.cz update-banner) */
-.dvcUpdateBanner.update-banner {
+/* Top banner: nová verzia (WordPress aj standalone) — výhradne dvc* triedy kvôli kolízii s WP témami */
+.dvcUpdateBanner {
   position: fixed;
   top: 0;
   left: 0;
@@ -1220,26 +1220,26 @@ a.dvcEventLocationLink:hover {
   background: #1a1d21;
   border-bottom: 1px solid rgba(247, 147, 26, 0.35);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-  animation: dvcUpdateBannerIn 0.28s ease-out;
+  animation: dvc-update-banner-in 0.28s ease-out;
 }
-@keyframes dvcUpdateBannerIn {
+@keyframes dvc-update-banner-in {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.dvcUpdateBanner.update-banner svg {
+.dvcUpdateBanner svg {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
   color: var(--dvc-accent, #f7931a);
 }
-.dvcUpdateBannerText.text {
+.dvcUpdateBannerText {
   font-size: 0.84rem;
   line-height: 1.45;
   color: var(--dvc-text);
   text-align: center;
   max-width: min(42rem, 100%);
 }
-.dvcUpdateBannerText.text strong {
+.dvcUpdateBannerText strong {
   font-weight: 700;
 }
 .dvcUpdateBannerBtn {
