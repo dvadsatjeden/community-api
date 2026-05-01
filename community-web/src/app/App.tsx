@@ -2,7 +2,7 @@ import * as E from "@evolu/common";
 import { useDvcEvolu } from "./evolu/dvcEvolu";
 import { allDvcRsvp, clearDvcRsvp, upsertDvcRsvp } from "./evolu/dvcEvoluQueries";
 import type { RsvpStatus } from "./evolu/rsvpStatus";
-import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { type DerivedAccount, deriveFromMnemonic, generateMnemonic, validateBip39Mnemonic } from "../features/account/seedRecovery";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -66,7 +66,7 @@ const TOOLS: Array<{ name: string; desc: string; url: string; emoji: string; log
 
 const emptyCounts = (): RsvpCounts => ({ going: 0, maybe: 0, not_going: 0 });
 const RSVP_LOCAL_KEY = "d21.localRsvpByEvent";
-const DEFAULT_API_BASE_URL = "http://localhost:3021";
+const DEFAULT_API_BASE_URL = import.meta.env.VITE_DEFAULT_API_BASE_URL ?? "http://localhost:3021";
 
 /** Same directory as `community-app.js` — written by `postbuild-wasm-alias.mjs` after each build. */
 const resolveCommunityAppVersionCheckUrl = (): string | null => {
@@ -88,6 +88,7 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   }
   return null;
 };
+
 const statusPillLabel = (status: RsvpStatus | undefined): string | null => {
   if (status === "going") return "IDEM";
   if (status === "maybe") return "MOŽNO";
@@ -234,6 +235,8 @@ const App = (): ReactElement => {
     return "unknown";
   });
   const [pushLoading, setPushLoading] = useState(false);
+  const [eventsFeature, setEventsFeature] = useState(true);
+  const [mapFeature, setMapFeature] = useState(true);
   const [mode] = useState<"embedded" | "standalone">(() => {
     const el = document.getElementById("dvadsatjeden-community-app");
     const url = el?.dataset.configUrl ?? "/wp-json/dvadsatjeden/v1/config";
@@ -279,6 +282,13 @@ const App = (): ReactElement => {
   const mapMarkersRef = useRef<L.Marker[]>([]);
   const communitiesMarkersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
+
+  useLayoutEffect(() => {
+    if (window.__DVC_BOOT_TIMER != null) {
+      window.clearTimeout(window.__DVC_BOOT_TIMER);
+      window.__DVC_BOOT_TIMER = undefined;
+    }
+  }, []);
 
   const loadLocalRsvpMap = useCallback((ownerId: string): Map<string, RsvpStatus> => {
     try {
@@ -479,28 +489,78 @@ const App = (): ReactElement => {
 
   useEffect(() => {
     if (!configUrl) return;
+    const mount = document.getElementById("dvadsatjeden-community-app");
+    const fallbackFromMount = (): string => {
+      const fromData = mount?.dataset.apiBaseUrl?.trim();
+      return fromData && fromData.length > 0 ? fromData : DEFAULT_API_BASE_URL;
+    };
     void fetch(configUrl)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json() as Promise<{
+          apiBaseUrl?: string;
+          vapidPublicKey?: string;
+          features?: { events?: boolean; map?: boolean; push?: boolean };
+        }>;
+      })
       .then((cfg) => {
-        if (typeof cfg.apiBaseUrl === "string" && cfg.apiBaseUrl.length > 0) {
-          setApiBaseUrl(cfg.apiBaseUrl);
+        if (typeof cfg.apiBaseUrl === "string" && cfg.apiBaseUrl.trim().length > 0) {
+          setApiBaseUrl(cfg.apiBaseUrl.trim());
         } else {
-          const mount = document.getElementById("dvadsatjeden-community-app");
-          setApiBaseUrl(mount?.dataset.apiBaseUrl ?? DEFAULT_API_BASE_URL);
+          setApiBaseUrl(fallbackFromMount());
         }
-        if (typeof cfg.vapidPublicKey === "string") setVapidPublicKey(cfg.vapidPublicKey);
+        if (typeof cfg.vapidPublicKey === "string" && cfg.vapidPublicKey.trim().length > 0) {
+          setVapidPublicKey(cfg.vapidPublicKey.trim());
+        }
+        if (typeof cfg.features?.events === "boolean") setEventsFeature(cfg.features.events);
+        if (typeof cfg.features?.map === "boolean") setMapFeature(cfg.features.map);
         if (cfg.features?.push === true) setPushFeature(true);
       })
-      .catch(() => setApiBaseUrl(DEFAULT_API_BASE_URL));
+      .catch(() => setApiBaseUrl(fallbackFromMount()));
   }, [configUrl]);
 
   useEffect(() => {
+    if (!eventsFeature) {
+      setMapLayers((prev) => {
+        if (!prev.has("events")) return prev;
+        const next = new Set(prev);
+        next.delete("events");
+        return next;
+      });
+    }
+  }, [eventsFeature]);
+
+  useEffect(() => {
+    if (!eventsFeature && (view === "home" || view === "calendar")) {
+      if (mapFeature) setView("map");
+      else if (mode === "standalone") setView("uvod");
+      else setView("info");
+    }
+  }, [eventsFeature, view, mapFeature, mode]);
+
+  useEffect(() => {
+    if (!mapFeature && view === "map") {
+      if (eventsFeature) setView("home");
+      else if (mode === "standalone") setView("uvod");
+      else setView("info");
+    }
+  }, [mapFeature, view, eventsFeature, mode]);
+
+  useEffect(() => {
     if (!apiBaseUrl) return;
+    if (!eventsFeature) {
+      setEvents([]);
+      return;
+    }
     const params = new URLSearchParams({ future: "1", sort: "asc" });
     void fetch(`${apiBaseUrl}/v1/events?${params.toString()}`)
-      .then((r) => r.json())
-      .then((data) => setEvents((data.items ?? []) as EventItem[]));
-  }, [apiBaseUrl]);
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((data) => setEvents((data.items ?? []) as EventItem[]))
+      .catch(() => setEvents([]));
+  }, [apiBaseUrl, eventsFeature]);
 
   useEffect(() => {
     if (!apiBaseUrl) return;
@@ -792,7 +852,7 @@ const App = (): ReactElement => {
     // Events layer
     mapMarkersRef.current.forEach((m) => m.remove());
     mapMarkersRef.current = [];
-    if (mapLayers.has("events")) {
+    if (mapLayers.has("events") && eventsFeature) {
       for (const ev of events) {
         if (ev.lat == null || ev.lng == null) continue;
         const icon = L.divIcon({
@@ -827,7 +887,7 @@ const App = (): ReactElement => {
         communitiesMarkersRef.current.push(marker);
       }
     }
-  }, [view, events, mapLayers, communities]);
+  }, [view, events, mapLayers, communities, eventsFeature]);
 
   // ── Push notifications ───────────────────────────────────────────────────
 
@@ -1112,7 +1172,11 @@ const App = (): ReactElement => {
                   Najrýchlejšie sa zapojíš cez Signal skupinu — tam sa dozvieš o novinkách ako prvý.
                 </p>
                 <div className="dvcRow">
-                  <button className="dvcBtn dvcBtnPrimary" type="button" onClick={() => setView("map")}>
+                  <button
+                    className="dvcBtn dvcBtnPrimary"
+                    type="button"
+                    onClick={() => (mapFeature ? setView("map") : setView("info"))}
+                  >
                     Pripojiť sa do skupiny
                   </button>
                   <a className="dvcBtn dvcBtnGhost" href="https://www.dvadsatjeden.org" target="_blank" rel="noreferrer">
@@ -1250,6 +1314,7 @@ const App = (): ReactElement => {
         {/* ── Map view — always in DOM so Leaflet persists ── */}
         <div className="dvcMapViewWrapper" style={{ display: view === "map" ? "flex" : "none" }}>
           <div className="dvcMapLayerBar">
+            {eventsFeature ? (
             <button
               className={`dvcMapLayerChip${mapLayers.has("events") ? " dvcMapLayerChip--active" : ""}`}
               type="button"
@@ -1257,6 +1322,7 @@ const App = (): ReactElement => {
             >
               Eventy
             </button>
+            ) : null}
             <button
               className={`dvcMapLayerChip${mapLayers.has("communities") ? " dvcMapLayerChip--active" : ""}`}
               type="button"
@@ -1321,7 +1387,11 @@ const App = (): ReactElement => {
             {pushFeature && pushStatus !== "unsupported" ? (
               <div className="dvcCard" style={{ marginBottom: "12px" }}>
                 <h2 className="dvcCardTitle">Notifikácie</h2>
-                {pushStatus === "denied" ? (
+                {!vapidPublicKey && pushStatus !== "subscribed" ? (
+                  <p className="dvcMuted">
+                    Push je zapnutý v nastaveniach webu, ale server nevrátil VAPID kľúč. Skontroluj API alebo dočasne vypni funkciu Push v administrácii.
+                  </p>
+                ) : pushStatus === "denied" ? (
                   <p className="dvcMuted">Notifikácie sú zablokované v nastaveniach prehliadača.</p>
                 ) : pushStatus === "subscribed" ? (
                   <div>
@@ -1333,7 +1403,7 @@ const App = (): ReactElement => {
                 ) : (
                   <div>
                     <p className="dvcMuted" style={{ marginBottom: "10px" }}>Zapni upozornenia na nové Bitcoin eventy.</p>
-                    <button className="dvcBtn" type="button" disabled={pushLoading} onClick={() => void subscribePush()}>
+                    <button className="dvcBtn" type="button" disabled={pushLoading || !vapidPublicKey} onClick={() => void subscribePush()}>
                       {pushLoading ? "…" : "🔔 Povoliť notifikácie"}
                     </button>
                   </div>
@@ -1675,6 +1745,7 @@ const App = (): ReactElement => {
           </svg>
           <span>Úvod</span>
         </button>
+        {eventsFeature ? (
         <button className={view === "home" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("home")}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.8"/>
@@ -1685,12 +1756,15 @@ const App = (): ReactElement => {
           </svg>
           <span>Kalendár</span>
         </button>
+        ) : null}
+        {mapFeature ? (
         <button className={view === "map" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("map")}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M9 20l-5-2V4l5 2m0 14l6-2m-6 2V6m6 12l5 2V6l-5-2m0 14V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <span>Mapa</span>
         </button>
+        ) : null}
         <button className={view === "info" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("info")}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8"/>
