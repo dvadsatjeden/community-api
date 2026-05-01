@@ -47,22 +47,23 @@ describe("deriveNostrCredentials", () => {
 });
 
 describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    delete process.env.REDIS_URL;
     process.env.NOSTR_AUTH_SECRET = SECRET;
-    _resetNostrChallengesForTesting();
+    await _resetNostrChallengesForTesting();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     delete process.env.NOSTR_AUTH_SECRET;
-    _resetNostrChallengesForTesting();
+    await _resetNostrChallengesForTesting();
   });
 
-  it("returns credentials after valid signed auth event", () => {
+  it("returns credentials after valid signed auth event", async () => {
     const sk = generateSecretKey();
     const pk = getPublicKey(sk);
 
     const chRes = mockRes();
-    nostrAuthChallengeGet({} as Request, chRes);
+    await nostrAuthChallengeGet({} as Request, chRes);
     expect(chRes.statusCode).toBe(200);
     const ch = chRes.__body as { challengeId: string; kind: number };
     expect(ch.challengeId).toHaveLength(32);
@@ -79,7 +80,7 @@ describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
     );
 
     const vRes = mockRes();
-    nostrAuthVerifyPost({ body: { event } } as Request, vRes);
+    await nostrAuthVerifyPost({ body: { event } } as Request, vRes);
     expect(vRes.statusCode).toBe(200);
     const body = vRes.__body as {
       ownerId: string;
@@ -96,10 +97,10 @@ describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
     expect(body.mnemonic).toBe(expected.mnemonic);
   });
 
-  it("rejects reuse of same challenge", () => {
+  it("rejects reuse of same challenge", async () => {
     const sk = generateSecretKey();
     const chRes = mockRes();
-    nostrAuthChallengeGet({} as Request, chRes);
+    await nostrAuthChallengeGet({} as Request, chRes);
     const ch = chRes.__body as { challengeId: string };
 
     const event = finalizeEvent(
@@ -113,11 +114,11 @@ describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
     );
 
     const v1 = mockRes();
-    nostrAuthVerifyPost({ body: { event } } as Request, v1);
+    await nostrAuthVerifyPost({ body: { event } } as Request, v1);
     expect(v1.statusCode).toBe(200);
 
     const v2 = mockRes();
-    nostrAuthVerifyPost({ body: { event } } as Request, v2);
+    await nostrAuthVerifyPost({ body: { event } } as Request, v2);
     expect(v2.statusCode).toBe(400);
   });
 });

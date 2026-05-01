@@ -104,13 +104,17 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
       const bp = await parseBunkerInput(raw);
       if (!bp) throw new Error("invalid_bunker_url");
       const pool = new SimplePool();
+      let signer: BunkerSigner | null = null;
       try {
-        const signer = BunkerSigner.fromBunker(generateSecretKey(), bp, { pool });
+        signer = BunkerSigner.fromBunker(generateSecretKey(), bp, { pool });
         await signer.connect();
-        const ev = await signer.signEvent(tpl);
-        await signer.close();
-        return ev;
+        return await signer.signEvent(tpl);
       } finally {
+        try {
+          if (signer) await signer.close();
+        } catch {
+          /* ignore close errors */
+        }
         pool.close(bp.relays);
       }
     });

@@ -75,6 +75,8 @@ Event source used by importer:
 
 Requires `NOSTR_AUTH_SECRET` on the API server. When unset, `GET /v1/auth/nostr/challenge` returns `503` with `{ error: "nostr_auth_not_configured" }` and `features.nostrLogin` in `GET /v1/config` is `false`.
 
+Optional `REDIS_URL`: when set, auth challenges are stored in Redis with TTL (shared across API instances and restarts). When unset, challenges are kept in process memory only.
+
 ### `GET /v1/auth/nostr/challenge`
 
 - Response `200`:
