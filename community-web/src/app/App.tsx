@@ -398,12 +398,6 @@ const App = (): ReactElement => {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    const prevController = navigator.serviceWorker.controller;
-    const onControllerChange = (): void => {
-      if (prevController != null) setNewVersionAvailable(true);
-    };
-    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
-
     const onUpdateFound = (): void => {
       if (navigator.serviceWorker.controller != null) setNewVersionAvailable(true);
     };
@@ -420,7 +414,6 @@ const App = (): ReactElement => {
     }, 30 * 60 * 1000);
 
     return () => {
-      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       unregisterUpdateFound?.();
       window.clearInterval(swUpdatePollId);
     };
