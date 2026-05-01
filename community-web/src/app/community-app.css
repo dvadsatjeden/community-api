@@ -1253,6 +1253,10 @@ a.dvcEventLocationLink:hover {
   color: var(--dvc-text);
   background: rgba(247, 147, 26, 0.12);
 }
+.dvcUpdateBannerBtn:focus-visible {
+  box-shadow: var(--dvc-focus);
+  outline: none;
+}
 .dvcUpdateBannerBtn:hover {
   background: rgba(247, 147, 26, 0.22);
 }
