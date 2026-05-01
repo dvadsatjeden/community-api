@@ -1203,6 +1203,64 @@ a.dvcEventLocationLink:hover {
   color: var(--dvc-text);
 }
 
+/* Top banner: nová verzia (WordPress aj standalone) — výhradne dvc* triedy kvôli kolízii s WP témami */
+.dvcUpdateBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  background: #1a1d21;
+  border-bottom: 1px solid rgba(247, 147, 26, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  animation: dvc-update-banner-in 0.28s ease-out;
+}
+@keyframes dvc-update-banner-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.dvcUpdateBanner svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: var(--dvc-accent, #f7931a);
+}
+.dvcUpdateBannerText {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--dvc-text);
+  text-align: center;
+  max-width: min(42rem, 100%);
+}
+.dvcUpdateBannerText strong {
+  font-weight: 700;
+}
+.dvcUpdateBannerBtn {
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid rgba(247, 147, 26, 0.45);
+  border-radius: var(--dvc-radius-sm, 8px);
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--dvc-text);
+  background: rgba(247, 147, 26, 0.12);
+}
+.dvcUpdateBannerBtn:focus-visible {
+  box-shadow: var(--dvc-focus);
+  outline: none;
+}
+.dvcUpdateBannerBtn:hover {
+  background: rgba(247, 147, 26, 0.22);
+}
+
 /* ── Misc ────────────────────────────────────────────────────────────── */
 .dvc h3 { font-size: inherit; font-weight: inherit; margin: 0; }
 
