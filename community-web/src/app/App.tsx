@@ -90,7 +90,11 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   return null;
 };
 
-/** WP/CDN často držia .json bez ?ver=; obídenie vlastného aj proxy cache pri kontrole aktualizácie. */
+/**
+ * WP/CDN často držia .json bez ?ver=; obídenie proxy cache pri kontrole aktualizácie.
+ * Nepoužívať keď aktívny Service Worker spravuje precache — query `_cb` mení URL a Workbox
+ * neservuje `community-app.version.json` z toho istého buildu ako `community-app.js` (nekonečný banner).
+ */
 const withVersionCheckCacheBust = (absoluteUrl: string): string => {
   try {
     const u = new URL(absoluteUrl);
@@ -416,7 +420,9 @@ const App = (): ReactElement => {
   const runServerVersionCheck = useCallback((): void => {
     const versionUrl = resolveCommunityAppVersionCheckUrl();
     if (!versionUrl) return;
-    const fetchUrl = withVersionCheckCacheBust(versionUrl);
+    const swControlsPage =
+      typeof navigator !== "undefined" && navigator.serviceWorker?.controller != null;
+    const fetchUrl = swControlsPage ? versionUrl : withVersionCheckCacheBust(versionUrl);
     void fetch(fetchUrl, { cache: "no-store", credentials: "omit" })
       .then(async (r) => {
         if (!r.ok) return;
