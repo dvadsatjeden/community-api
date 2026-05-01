@@ -7,6 +7,8 @@ export type DerivedAccount = {
   ownerId: string;
   rsvpToken: string;
   dataKey: string;
+  /** Persistované: false = seed ešte uložený na zariadení, používateľ musí potvrdiť zálohu. */
+  seedBackedUpConfirmed?: boolean;
 };
 
 const textEncoder = new TextEncoder();
@@ -44,5 +46,6 @@ export const deriveFromMnemonic = (mnemonic: string): DerivedAccount => {
     ownerId: hash(`owner:${normalized}`).slice(0, 32),
     rsvpToken: hash(`rsvp:${normalized}`),
     dataKey: hash(`key:${normalized}`),
+    seedBackedUpConfirmed: false,
   };
 };
