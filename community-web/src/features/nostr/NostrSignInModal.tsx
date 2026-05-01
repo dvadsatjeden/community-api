@@ -25,6 +25,7 @@ function humanizeNostrAuthError(code: string): string {
     invalid_event_signature: "Podpis udalosti bol odmietnutý.",
     unknown_or_expired_challenge: "Výzva expirovala — skús znova.",
     invalid_verify_payload: "Neočakávaná odpoveď servera.",
+    server_challenge_kind_mismatch: "Server vrátil neočakávaný typ výzvy.",
   };
   return map[code] ?? code.replace(/_/g, " ");
 }
@@ -154,14 +155,13 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
             onSelect={onNip07}
             disabled={busy}
           />
-          <div className="dvcNostrMethodStack">
-            <MethodCard
-              title="Nostr Connect (NIP-46)"
-              description="bunker:// alebo nsecBunker, vzdialený podpis"
-              icon="link"
-              onSelect={onNip46}
-              disabled={busy}
-            />
+
+          <div className="dvcNostrMethodBlock">
+            <span className="dvcNostrMethodIcon" aria-hidden>
+              <IconLink />
+            </span>
+            <span className="dvcNostrMethodTitle">Nostr Connect (NIP-46)</span>
+            <span className="dvcNostrMethodDesc">nsecBunker, vzdialený podpis — vlož bunker alebo nostrconnect URL a potvrď.</span>
             <input
               className="dvcInput dvcNostrBunkerInput"
               type="text"
@@ -172,16 +172,22 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
               autoComplete="off"
               disabled={busy}
             />
+            <button
+              className="dvcBtn dvcBtnPrimary dvcNostrMethodSubmit"
+              type="button"
+              onClick={onNip46}
+              disabled={busy || bunkerInput.trim().length === 0}
+            >
+              Pripojiť a podpísať
+            </button>
           </div>
-          <div className="dvcNostrMethodStack">
-            <MethodCard
-              title="Vložiť nsec (súkromný kľúč)"
-              description="Neodporúčané — kľúč môže byť odhalený (clipboard, malware)"
-              icon="warn"
-              warn
-              onSelect={onNsec}
-              disabled={busy}
-            />
+
+          <div className="dvcNostrMethodBlock dvcNostrMethodBlock--warn">
+            <span className="dvcNostrMethodIcon" aria-hidden>
+              <IconWarn />
+            </span>
+            <span className="dvcNostrMethodTitle">Vložiť nsec (súkromný kľúč)</span>
+            <span className="dvcNostrMethodDesc dvcNostrMethodDesc--warn">Neodporúčané — kľúč môže byť odhalený (clipboard, malware).</span>
             <textarea
               className="dvcTextarea dvcNostrNsecInput"
               placeholder="nsec1…"
@@ -194,6 +200,14 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
               disabled={busy}
               rows={2}
             />
+            <button
+              className="dvcBtn dvcBtnPrimary dvcNostrMethodSubmit"
+              type="button"
+              onClick={onNsec}
+              disabled={busy || nsecInput.trim().length === 0}
+            >
+              Podpísať cez nsec
+            </button>
           </div>
         </div>
 

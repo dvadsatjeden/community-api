@@ -1948,10 +1948,29 @@ a.dvcToolCard:hover {
   gap: 12px;
 }
 
-.dvcNostrMethodStack {
+.dvcNostrMethodBlock {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 8px;
+  width: 100%;
+  padding: 14px 14px 12px;
+  border-radius: var(--dvc-radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+}
+.dvcNostrMethodBlock--warn {
+  border-color: rgba(247, 147, 26, 0.45);
+}
+
+.dvcNostrMethodBlock > .dvcNostrMethodIcon {
+  align-self: flex-start;
+}
+
+.dvcNostrMethodSubmit {
+  width: 100%;
+  margin-top: 4px;
 }
 
 .dvcNostrMethodCard {
