@@ -9,6 +9,7 @@ import { getImportStatus, markImport, markImportError } from "./modules/import/i
 import { getMyRsvp, getRsvpCounts, removeRsvp, submitRsvp } from "./modules/rsvp/rsvp.controller";
 import { getArticles } from "./modules/articles/articles";
 import { getCommunities, getCommunityUrl } from "./modules/communities/communities";
+import { isNostrAuthConfigured, nostrAuthChallengeGet, nostrAuthVerifyPost } from "./modules/nostr-auth/nostr-auth.controller";
 
 const app = express();
 
@@ -66,6 +67,8 @@ app.get("/", (_req, res) => {
       rsvp: "/v1/rsvp",
       importStatus: "/v1/import-status",
       importRun: "POST /v1/import/run",
+      nostrAuthChallenge: "GET /v1/auth/nostr/challenge",
+      nostrAuthVerify: "POST /v1/auth/nostr/verify",
     },
   });
 });
@@ -80,7 +83,12 @@ const publicApiBaseUrl =
 app.get("/v1/config", (_req, res) => {
   res.json({
     apiBaseUrl: publicApiBaseUrl,
-    features: { events: true, map: true, push: !!getVapidPublicKey() },
+    features: {
+      events: true,
+      map: true,
+      push: !!getVapidPublicKey(),
+      nostrLogin: isNostrAuthConfigured(),
+    },
     vapidPublicKey: getVapidPublicKey(),
     sources: {
       events: process.env.EVENTS_SOURCE_URL ?? "",
@@ -129,6 +137,7 @@ app.get("/v1/articles", async (_req, res) => {
 });
 
 const joinRateLimit = makeRateLimit(10, 60_000);
+const nostrAuthRateLimit = makeRateLimit(40, 60_000);
 
 app.get("/v1/communities", async (_req, res) => {
   try {
@@ -139,6 +148,9 @@ app.get("/v1/communities", async (_req, res) => {
     res.status(502).json({ error: "communities unavailable" });
   }
 });
+
+app.get("/v1/auth/nostr/challenge", nostrAuthRateLimit, nostrAuthChallengeGet);
+app.post("/v1/auth/nostr/verify", nostrAuthRateLimit, nostrAuthVerifyPost);
 
 app.get("/v1/communities/:id/join", joinRateLimit, async (req, res) => {
   const rawId = req.params.id;

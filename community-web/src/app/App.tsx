@@ -4,6 +4,7 @@ import { allDvcRsvp, clearDvcRsvp, upsertDvcRsvp } from "./evolu/dvcEvoluQueries
 import type { RsvpStatus } from "./evolu/rsvpStatus";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { type DerivedAccount, deriveFromMnemonic, generateMnemonic, validateBip39Mnemonic } from "../features/account/seedRecovery";
+import { NostrSignInModal } from "../features/nostr/NostrSignInModal";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./community-app.css";
@@ -177,6 +178,8 @@ type PersistedAccount = {
   dataKey?: string;
   mnemonic?: string;
   seedBackedUpConfirmed?: boolean;
+  authMethod?: "bip39" | "nostr";
+  nostrPubkeyBech32?: string;
 };
 
 function derivedAccountToPersisted(account: DerivedAccount): PersistedAccount {
@@ -194,6 +197,8 @@ function derivedAccountToPersisted(account: DerivedAccount): PersistedAccount {
   } else {
     persist.seedBackedUpConfirmed = true;
   }
+  if (account.authMethod) persist.authMethod = account.authMethod;
+  if (account.nostrPubkeyBech32) persist.nostrPubkeyBech32 = account.nostrPubkeyBech32;
   return persist;
 }
 
@@ -209,6 +214,20 @@ function persistedToDerived(p: PersistedAccount): DerivedAccount | null {
       dataKey,
       mnemonic: "",
       seedBackedUpConfirmed: true,
+      authMethod: p.authMethod === "nostr" ? "nostr" : "bip39",
+      nostrPubkeyBech32: typeof p.nostrPubkeyBech32 === "string" ? p.nostrPubkeyBech32 : undefined,
+    };
+  }
+
+  if (p.authMethod === "nostr" && mn && validateBip39Mnemonic(mn)) {
+    return {
+      ownerId: p.ownerId,
+      rsvpToken: p.rsvpToken,
+      dataKey,
+      mnemonic: mn,
+      seedBackedUpConfirmed: false,
+      authMethod: "nostr",
+      nostrPubkeyBech32: typeof p.nostrPubkeyBech32 === "string" ? p.nostrPubkeyBech32 : undefined,
     };
   }
 
@@ -374,6 +393,8 @@ const App = (): ReactElement => {
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [nostrLogin, setNostrLogin] = useState(false);
+  const [isNostrSignInOpen, setIsNostrSignInOpen] = useState(false);
   const [mnemonicError, setMnemonicError] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
   const [communityDetail, setCommunityDetail] = useState<Community | null>(null);
@@ -620,7 +641,7 @@ const App = (): ReactElement => {
         return r.json() as Promise<{
           apiBaseUrl?: string;
           vapidPublicKey?: string;
-          features?: { events?: boolean; map?: boolean; push?: boolean };
+          features?: { events?: boolean; map?: boolean; push?: boolean; nostrLogin?: boolean };
         }>;
       })
       .then((cfg) => {
@@ -635,6 +656,7 @@ const App = (): ReactElement => {
         if (typeof cfg.features?.events === "boolean") setEventsFeature(cfg.features.events);
         if (typeof cfg.features?.map === "boolean") setMapFeature(cfg.features.map);
         if (cfg.features?.push === true) setPushFeature(true);
+        setNostrLogin(cfg.features?.nostrLogin === true);
       })
       .catch(() => setApiBaseUrl(fallbackFromMount()));
   }, [configUrl]);
@@ -807,11 +829,12 @@ const App = (): ReactElement => {
       if (lightboxImageUrl) { setLightboxImageUrl(null); return; }
       if (detailEvent) { setDetailEvent(null); return; }
       if (communityDetail) { setCommunityDetail(null); return; }
+      if (isNostrSignInOpen) { setIsNostrSignInOpen(false); return; }
       if (isAccountModalOpen) setIsAccountModalOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightboxImageUrl, detailEvent, communityDetail, isAccountModalOpen]);
+  }, [lightboxImageUrl, detailEvent, communityDetail, isAccountModalOpen, isNostrSignInOpen]);
 
   useEffect(() => {
     if (isAccountModalOpen && account?.mnemonic) {
@@ -833,6 +856,16 @@ const App = (): ReactElement => {
     setSeedBackupSavedChecked(false);
     setAccountResetNotice(null);
   };
+
+  const onNostrSignInSuccess = useCallback((next: DerivedAccount) => {
+    setAccount(next);
+    if (!saveAccountToStorage(next)) {
+      setAccountResetNotice("Upozornenie: účet sa nepodarilo uložiť — skús znova.");
+      window.setTimeout(() => setAccountResetNotice(null), 5000);
+    }
+    setIsNostrSignInOpen(false);
+    setIsAccountModalOpen(false);
+  }, []);
 
   const createAccount = (): void => {
     const next = deriveFromMnemonic(suggestedSeed);
@@ -1783,6 +1816,20 @@ const App = (): ReactElement => {
                         Obnoviť účet
                       </button>
                     </div>
+
+                    {nostrLogin && apiBaseUrl ? (
+                      <>
+                        <hr className="dvcDivider" />
+                        <p className="dvcMuted dvcMuted--sm">
+                          Máš Nostr kľúč? Prihlásenie bez vlastných 12 slov (server vydá zodpovedajúci lokálny Evolu seed po overení podpisu).
+                        </p>
+                        <div className="dvcRow">
+                          <button className="dvcBtn dvcBtnGhost" type="button" onClick={() => setIsNostrSignInOpen(true)}>
+                            Prihlásiť sa cez Nostr
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </>
               ) : (
@@ -1802,8 +1849,17 @@ const App = (): ReactElement => {
                       <code className="dvcCodeInline">{account.ownerId}</code>
                     </div>
 
+                    {account.nostrPubkeyBech32 ? (
+                      <div>
+                        <div className="dvcLabel">Nostr npub (verejné)</div>
+                        <code className="dvcCodeInline" style={{ wordBreak: "break-all" }}>{account.nostrPubkeyBech32}</code>
+                      </div>
+                    ) : null}
+
                     <div>
-                      <div className="dvcLabel">Záloha — 12 slov (nikomu neposielaj)</div>
+                      <div className="dvcLabel">
+                        {account.authMethod === "nostr" ? "Záloha — lokálne slová pre Evolu (nikomu neposielaj)" : "Záloha — 12 slov (nikomu neposielaj)"}
+                      </div>
                       {account.mnemonic ? (
                         <>
                           <div className="dvcSeedBackupConfirmRow">
@@ -1815,7 +1871,11 @@ const App = (): ReactElement => {
                               onChange={(e) => setSeedBackupSavedChecked(e.target.checked)}
                             />
                             <label htmlFor="dvc-seed-backup-ack" className="dvcSeedBackupConfirmLabel">
-                              Mám seed bezpečne uložený mimo tohto zariadenia (papier, správca hesiel, …).
+                              {account.authMethod === "nostr" ? (
+                                <>Mám zálohu Nostr kľúča (nsec) alebo trvalý prístup cez rozšírenie/bunker mimo tohto zariadenia a uvedomujem si, že tieto slová sú rovnako citlivé ako seed.</>
+                              ) : (
+                                <>Mám seed bezpečne uložený mimo tohto zariadenia (papier, správca hesiel, …).</>
+                              )}
                             </label>
                           </div>
                           <div className="dvcRow" style={{ marginBottom: "10px" }}>
@@ -1846,13 +1906,17 @@ const App = (): ReactElement => {
                               onClick={confirmSeedBackedUp}
                               disabled={!seedBackupSavedChecked || !evoluReady || isEvoluConnecting}
                             >
-                              Potvrdiť uloženie — seed vymažem z tohto zariadenia
+                              {account.authMethod === "nostr" ? "Potvrdiť uloženie — slová vymažem z tohto zariadenia" : "Potvrdiť uloženie — seed vymažem z tohto zariadenia"}
                             </button>
                           </div>
                         </>
                       ) : (
                         <p className="dvcMuted dvcMuted--sm">
-                          Na tomto zariadení máš potvrdené, že máš zálohu uloženú mimo aplikácie. Seed tu už neukladáme - na inom zariadení zadaj tých istých 12 slov.
+                          {account.authMethod === "nostr" ? (
+                            <>Na tomto zariadení máš potvrdenú zálohu. Lokálne slová pre Evolu tu už neukladáme — na inom zariadení sa znova prihlás cez Nostr s rovnakým kľúčom.</>
+                          ) : (
+                            <>Na tomto zariadení máš potvrdené, že máš zálohu uloženú mimo aplikácie. Seed tu už neukladáme - na inom zariadení zadaj tých istých 12 slov.</>
+                          )}
                         </p>
                       )}
                     </div>
@@ -1876,13 +1940,24 @@ const App = (): ReactElement => {
                       </button>
                     </div>
                     <p className="dvcMuted dvcMuted--sm">
-                      Rovnaký seed na inom zariadení obnoví tvoj účet aj RSVP históriu.
+                      {account.authMethod === "nostr"
+                        ? "Rovnaké Nostr prihlásenie na inom zariadení obnoví tvoj účet aj RSVP históriu."
+                        : "Rovnaký seed na inom zariadení obnoví tvoj účet aj RSVP históriu."}
                     </p>
                   </div>
                 </>
               )}
             </div>
           </div>
+        ) : null}
+
+        {apiBaseUrl ? (
+          <NostrSignInModal
+            apiBaseUrl={apiBaseUrl}
+            isOpen={isNostrSignInOpen}
+            onClose={() => setIsNostrSignInOpen(false)}
+            onSuccess={onNostrSignInSuccess}
+          />
         ) : null}
 
         {accountResetNotice ? (

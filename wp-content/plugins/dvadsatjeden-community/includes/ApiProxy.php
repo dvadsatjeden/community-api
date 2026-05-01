@@ -40,10 +40,15 @@ final class ApiProxy
                         $code = (int) wp_remote_retrieve_response_code($upstream);
                         if ($code >= 200 && $code < 300) {
                             $decoded = json_decode((string) wp_remote_retrieve_body($upstream), true);
-                            if (is_array($decoded) && isset($decoded['vapidPublicKey']) && is_string($decoded['vapidPublicKey'])) {
-                                $key = trim($decoded['vapidPublicKey']);
-                                if ($key !== '') {
-                                    $payload['vapidPublicKey'] = $key;
+                            if (is_array($decoded)) {
+                                if (isset($decoded['vapidPublicKey']) && is_string($decoded['vapidPublicKey'])) {
+                                    $key = trim($decoded['vapidPublicKey']);
+                                    if ($key !== '') {
+                                        $payload['vapidPublicKey'] = $key;
+                                    }
+                                }
+                                if (is_array($decoded['features'] ?? null) && array_key_exists('nostrLogin', $decoded['features'])) {
+                                    $payload['features']['nostrLogin'] = (bool) $decoded['features']['nostrLogin'];
                                 }
                             }
                         }

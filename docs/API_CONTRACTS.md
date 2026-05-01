@@ -71,13 +71,41 @@ Event source used by importer:
   - `sourceUrl?: string` (overrides default/ENV source for this run)
 - Response: same payload as `GET /import-status`.
 
+## Nostr login (optional)
+
+Requires `NOSTR_AUTH_SECRET` on the API server. When unset, `GET /v1/auth/nostr/challenge` returns `503` with `{ error: "nostr_auth_not_configured" }` and `features.nostrLogin` in `GET /v1/config` is `false`.
+
+### `GET /v1/auth/nostr/challenge`
+
+- Response `200`:
+  - `challengeId: string` — hex, single-use, expires in 5 minutes
+  - `kind: number` — always `27241` (custom auth event kind)
+  - `message: string` — human-readable hint for the signer UI
+
+### `POST /v1/auth/nostr/verify`
+
+- Request JSON:
+  - `event: NostrEvent` — signed event with:
+    - `kind` = `27241`
+    - `tags` includes `["challenge", "<challengeId>"]` where `challengeId` was issued by the challenge endpoint (not yet consumed)
+    - `created_at` within ±10 minutes of server time
+    - valid Schnorr signature for `event.pubkey`
+- Response `200`:
+  - `ownerId: string` — app owner id (hex prefix, same length convention as seed-derived accounts)
+  - `rsvpToken: string` — anonymous RSVP token (pass as `anonymousToken` / `X-Anonymous-Token`)
+  - `dataKey: string`
+  - `mnemonic: string` — 12 English BIP-39 words (Evolu `restoreAppOwner` secret; treat like a seed until user confirms backup and you clear it from storage)
+  - `nostrPubkeyHex: string` — 64-char lowercase hex
+  - `npub: string` — bech32 `npub1…` when encoding succeeds, else may be empty
+- Error responses: `400` with `{ error: string }` codes such as `invalid_event_signature`, `unknown_or_expired_challenge`, etc.; `503` if auth is not configured.
+
 ## WP handoff contract
 
 WP REST endpoint: `GET /wp-json/dvadsatjeden/v1/config`
 
 - Response:
   - `apiBaseUrl: string`
-  - `features: { events: boolean, map: boolean, push: boolean }`
+  - `features: { events: boolean, map: boolean, push: boolean, nostrLogin?: boolean }`
   - `sources: { events: string, venues: string }`
 
 WP REST endpoint: `POST /wp-json/dvadsatjeden/v1/import-run`
