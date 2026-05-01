@@ -294,6 +294,11 @@ function saveAccountToStorage(account: DerivedAccount): boolean {
     localStorage.setItem("d21.account", JSON.stringify(persist));
   } catch {
     localStorageOk = false;
+    try {
+      localStorage.removeItem("d21.account");
+    } catch {
+      /* ignore — avoid leaving catch before finally if removeItem throws */
+    }
   } finally {
     void idbSetAccount(persist);
   }
