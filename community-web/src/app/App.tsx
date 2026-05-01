@@ -216,11 +216,25 @@ function persistedToDerived(p: PersistedAccount): DerivedAccount | null {
     let derived: DerivedAccount;
     try {
       derived = deriveFromMnemonic(mn);
-    } catch {
-      return { ownerId: p.ownerId, rsvpToken: p.rsvpToken, dataKey, mnemonic: "", seedBackedUpConfirmed: true };
+    } catch (err) {
+      console.warn("[d21] deriveFromMnemonic failed for persisted account", err);
+      return {
+        ownerId: p.ownerId,
+        rsvpToken: p.rsvpToken,
+        dataKey,
+        mnemonic: mn,
+        seedBackedUpConfirmed: false,
+      };
     }
     if (derived.ownerId !== p.ownerId || derived.rsvpToken !== p.rsvpToken) {
-      return { ownerId: p.ownerId, rsvpToken: p.rsvpToken, dataKey, mnemonic: "", seedBackedUpConfirmed: true };
+      console.warn("[d21] persisted ownerId/rsvpToken do not match derived identity from mnemonic");
+      return {
+        ownerId: p.ownerId,
+        rsvpToken: p.rsvpToken,
+        dataKey,
+        mnemonic: mn,
+        seedBackedUpConfirmed: false,
+      };
     }
     const isPending = p.seedBackedUpConfirmed === false || p.seedBackedUpConfirmed === undefined;
     return {
@@ -230,12 +244,15 @@ function persistedToDerived(p: PersistedAccount): DerivedAccount | null {
     };
   }
 
+  if (mn) {
+    console.warn("[d21] persisted mnemonic failed BIP-39 validation");
+  }
   return {
     ownerId: p.ownerId,
     rsvpToken: p.rsvpToken,
     dataKey,
-    mnemonic: "",
-    seedBackedUpConfirmed: true,
+    mnemonic: mn,
+    seedBackedUpConfirmed: false,
   };
 }
 
@@ -475,14 +492,21 @@ const App = (): ReactElement => {
         setIsAccountModalOpen(true);
         return;
       }
+      const acc = persistedToDerived(fromIDB);
+      if (!acc) {
+        localStorage.removeItem("d21.account");
+        void idbSetAccount(null);
+        setIsAccountModalOpen(true);
+        return;
+      }
+      const persist = derivedAccountToPersisted(acc);
       try {
-        localStorage.setItem("d21.account", JSON.stringify(fromIDB));
+        localStorage.setItem("d21.account", JSON.stringify(persist));
       } catch {
         /* non-fatal */
       }
-      const acc = persistedToDerived(fromIDB);
-      if (acc) setAccount(acc);
-      else setIsAccountModalOpen(true);
+      void idbSetAccount(persist);
+      setAccount(acc);
     });
   }, []);
 
