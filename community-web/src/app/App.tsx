@@ -170,7 +170,91 @@ const CommunityLogo = ({ community }: { community: Community }): ReactElement =>
   return <img key={urls[attempt]} src={urls[attempt]} onError={() => setAttempt((a) => a + 1)} className="dvcCommunityModalLogo" alt="" />;
 };
 
-type StoredAccount = Omit<DerivedAccount, "mnemonic">;
+/** JSON shape in localStorage + IndexedDB (môže obsahovať seed do potvrdenia zálohy). */
+type PersistedAccount = {
+  ownerId: string;
+  rsvpToken: string;
+  dataKey?: string;
+  mnemonic?: string;
+  seedBackedUpConfirmed?: boolean;
+};
+
+function derivedAccountToPersisted(account: DerivedAccount): PersistedAccount {
+  const dataKey = account.dataKey ?? "";
+  const hasMnemonic = account.mnemonic.trim().length > 0;
+  const pending = hasMnemonic && account.seedBackedUpConfirmed !== true;
+  const persist: PersistedAccount = {
+    ownerId: account.ownerId,
+    rsvpToken: account.rsvpToken,
+    dataKey,
+  };
+  if (pending) {
+    persist.mnemonic = account.mnemonic.trim();
+    persist.seedBackedUpConfirmed = false;
+  } else {
+    persist.seedBackedUpConfirmed = true;
+  }
+  return persist;
+}
+
+function persistedToDerived(p: PersistedAccount): DerivedAccount | null {
+  if (!p.ownerId || !p.rsvpToken) return null;
+  const dataKey = p.dataKey ?? "";
+  const mn = typeof p.mnemonic === "string" ? p.mnemonic.trim() : "";
+
+  if (p.seedBackedUpConfirmed === true) {
+    return {
+      ownerId: p.ownerId,
+      rsvpToken: p.rsvpToken,
+      dataKey,
+      mnemonic: "",
+      seedBackedUpConfirmed: true,
+    };
+  }
+
+  if (mn && validateBip39Mnemonic(mn)) {
+    let derived: DerivedAccount;
+    try {
+      derived = deriveFromMnemonic(mn);
+    } catch (err) {
+      console.warn("[d21] deriveFromMnemonic failed for persisted account", err);
+      return {
+        ownerId: p.ownerId,
+        rsvpToken: p.rsvpToken,
+        dataKey,
+        mnemonic: mn,
+        seedBackedUpConfirmed: false,
+      };
+    }
+    if (derived.ownerId !== p.ownerId || derived.rsvpToken !== p.rsvpToken) {
+      console.warn("[d21] persisted ownerId/rsvpToken do not match derived identity from mnemonic");
+      return {
+        ownerId: p.ownerId,
+        rsvpToken: p.rsvpToken,
+        dataKey,
+        mnemonic: mn,
+        seedBackedUpConfirmed: false,
+      };
+    }
+    const isPending = p.seedBackedUpConfirmed === false || p.seedBackedUpConfirmed === undefined;
+    return {
+      ...derived,
+      dataKey: dataKey || derived.dataKey,
+      seedBackedUpConfirmed: isPending ? false : true,
+    };
+  }
+
+  if (mn) {
+    console.warn("[d21] persisted mnemonic failed BIP-39 validation");
+  }
+  return {
+    ownerId: p.ownerId,
+    rsvpToken: p.rsvpToken,
+    dataKey,
+    mnemonic: mn,
+    seedBackedUpConfirmed: false,
+  };
+}
 
 // ── IndexedDB backup (survives localStorage eviction) ──────────────────────
 const IDB_NAME = "d21-storage";
@@ -185,18 +269,18 @@ function idbOpen(): Promise<IDBDatabase> {
   });
 }
 
-async function idbGetAccount(): Promise<StoredAccount | null> {
+async function idbGetAccount(): Promise<PersistedAccount | null> {
   try {
     const db = await idbOpen();
     return new Promise((resolve) => {
       const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get("account");
-      req.onsuccess = () => resolve((req.result as StoredAccount) ?? null);
+      req.onsuccess = () => resolve((req.result as PersistedAccount) ?? null);
       req.onerror = () => resolve(null);
     });
   } catch { return null; }
 }
 
-async function idbSetAccount(account: StoredAccount | null): Promise<void> {
+async function idbSetAccount(account: PersistedAccount | null): Promise<void> {
   try {
     const db = await idbOpen();
     await new Promise<void>((resolve) => {
@@ -213,27 +297,29 @@ function loadAccountFromStorage(): DerivedAccount | null {
   try {
     const raw = localStorage.getItem("d21.account");
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<DerivedAccount>;
-    if (!parsed.ownerId || !parsed.rsvpToken) return null;
-    // Migration: old format stored mnemonic — strip it, resave clean
-    if (parsed.mnemonic) {
-      try {
-        const { mnemonic: _, ...clean } = parsed as DerivedAccount;
-        localStorage.setItem("d21.account", JSON.stringify(clean));
-      } catch { /* write-back failure is non-fatal; proceed with the parsed account */ }
-    }
-    return { ownerId: parsed.ownerId, rsvpToken: parsed.rsvpToken, dataKey: parsed.dataKey ?? "", mnemonic: "" };
-  } catch { return null; }
+    return persistedToDerived(JSON.parse(raw) as PersistedAccount);
+  } catch {
+    return null;
+  }
 }
 
-/** Returns true on success, false if localStorage.setItem threw (QuotaExceededError etc.). */
+/** Returns true if localStorage.setItem succeeded; false if it threw. IndexedDB is always updated with the same persist blob. */
 function saveAccountToStorage(account: DerivedAccount): boolean {
-  const { mnemonic: _, ...storable } = account;
+  const persist = derivedAccountToPersisted(account);
+  let localStorageOk = true;
   try {
-    localStorage.setItem("d21.account", JSON.stringify(storable));
-  } catch { return false; }
-  void idbSetAccount(storable);
-  return true;
+    localStorage.setItem("d21.account", JSON.stringify(persist));
+  } catch {
+    localStorageOk = false;
+    try {
+      localStorage.removeItem("d21.account");
+    } catch {
+      /* ignore — avoid leaving catch before finally if removeItem throws */
+    }
+  } finally {
+    void idbSetAccount(persist);
+  }
+  return localStorageOk;
 }
 
 const App = (): ReactElement => {
@@ -282,6 +368,7 @@ const App = (): ReactElement => {
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [lightboxImageAlt, setLightboxImageAlt] = useState<string>("");
   const [isSeedVisible, setIsSeedVisible] = useState(false);
+  const [seedBackupSavedChecked, setSeedBackupSavedChecked] = useState(false);
   const [seedCopied, setSeedCopied] = useState(false);
   const [accountResetNotice, setAccountResetNotice] = useState<string | null>(null);
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
@@ -401,12 +488,25 @@ const App = (): ReactElement => {
     if (navigator.storage?.persist) void navigator.storage.persist();
     if (loadAccountFromStorage()) return;
     void idbGetAccount().then((fromIDB) => {
-      if (fromIDB) {
-        try { localStorage.setItem("d21.account", JSON.stringify(fromIDB)); } catch { /* non-fatal */ }
-        setAccount({ ...fromIDB, mnemonic: "" });
-      } else {
+      if (!fromIDB) {
         setIsAccountModalOpen(true);
+        return;
       }
+      const acc = persistedToDerived(fromIDB);
+      if (!acc) {
+        localStorage.removeItem("d21.account");
+        void idbSetAccount(null);
+        setIsAccountModalOpen(true);
+        return;
+      }
+      const persist = derivedAccountToPersisted(acc);
+      try {
+        localStorage.setItem("d21.account", JSON.stringify(persist));
+      } catch {
+        /* non-fatal */
+      }
+      void idbSetAccount(persist);
+      setAccount(acc);
     });
   }, []);
 
@@ -449,6 +549,7 @@ const App = (): ReactElement => {
     if (!account) {
       setEvoluReady(false);
       setIsSeedVisible(false);
+      setSeedBackupSavedChecked(false);
       setEvoluError(null);
       setIsEvoluConnecting(false);
       setLocalRsvpByEvent(new Map());
@@ -712,6 +813,27 @@ const App = (): ReactElement => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [lightboxImageUrl, detailEvent, communityDetail, isAccountModalOpen]);
 
+  useEffect(() => {
+    if (isAccountModalOpen && account?.mnemonic) {
+      setSeedBackupSavedChecked(false);
+    }
+  }, [isAccountModalOpen, account?.ownerId, account?.mnemonic]);
+
+  const confirmSeedBackedUp = (): void => {
+    if (!account?.mnemonic) return;
+    if (!seedBackupSavedChecked || !evoluReady || isEvoluConnecting) return;
+    const next: DerivedAccount = { ...account, seedBackedUpConfirmed: true };
+    if (!saveAccountToStorage(next)) {
+      setAccountResetNotice("Upozornenie: potvrdenie zálohy sa nepodarilo uložiť — skús znova.");
+      window.setTimeout(() => setAccountResetNotice(null), 5000);
+      return;
+    }
+    setAccount({ ...next, mnemonic: "" });
+    setIsSeedVisible(false);
+    setSeedBackupSavedChecked(false);
+    setAccountResetNotice(null);
+  };
+
   const createAccount = (): void => {
     const next = deriveFromMnemonic(suggestedSeed);
     setAccount(next);
@@ -750,6 +872,7 @@ const App = (): ReactElement => {
     setEvoluError(null);
     setIsEvoluConnecting(false);
     setIsSeedVisible(false);
+    setSeedBackupSavedChecked(false);
     setSeedCopied(false);
     setIsAccountModalOpen(false);
     setAccountResetNotice("Účet na tomto zariadení bol vymazaný.");
@@ -1683,6 +1806,18 @@ const App = (): ReactElement => {
                       <div className="dvcLabel">Záloha — 12 slov (nikomu neposielaj)</div>
                       {account.mnemonic ? (
                         <>
+                          <div className="dvcSeedBackupConfirmRow">
+                            <input
+                              id="dvc-seed-backup-ack"
+                              className="dvcSeedBackupConfirmCheckbox"
+                              type="checkbox"
+                              checked={seedBackupSavedChecked}
+                              onChange={(e) => setSeedBackupSavedChecked(e.target.checked)}
+                            />
+                            <label htmlFor="dvc-seed-backup-ack" className="dvcSeedBackupConfirmLabel">
+                              Mám seed bezpečne uložený mimo tohto zariadenia (papier, správca hesiel, …).
+                            </label>
+                          </div>
                           <div className="dvcRow" style={{ marginBottom: "10px" }}>
                             <button className="dvcBtn dvcBtnGhost" type="button" onClick={() => setIsSeedVisible((v) => !v)}>
                               {isSeedVisible ? "Skryť seed" : "Zobraziť seed"}
@@ -1699,9 +1834,26 @@ const App = (): ReactElement => {
                               <SeedTable mnemonic={account.mnemonic} />
                             </div>
                           ) : null}
+                          {seedBackupSavedChecked && (!evoluReady || isEvoluConnecting) ? (
+                            <p className="dvcMuted dvcMuted--sm" style={{ marginTop: "10px" }}>
+                              Pred potvrdením počkaj, kým bude Evolu pripravené. Ak sa pripojenie nepodarí, použi „Skúsiť znova“ nižšie.
+                            </p>
+                          ) : null}
+                          <div className="dvcRow" style={{ marginTop: "12px" }}>
+                            <button
+                              className="dvcBtn dvcBtnPrimary"
+                              type="button"
+                              onClick={confirmSeedBackedUp}
+                              disabled={!seedBackupSavedChecked || !evoluReady || isEvoluConnecting}
+                            >
+                              Potvrdiť uloženie — seed vymažem z tohto zariadenia
+                            </button>
+                          </div>
                         </>
                       ) : (
-                        <p className="dvcMuted dvcMuted--sm">Seed nie je v pamäti tejto relácie. Ak potrebuješ zálohu, odhláš sa a obnov účet zadaním 12 slov.</p>
+                        <p className="dvcMuted dvcMuted--sm">
+                          Na tomto zariadení máš potvrdené, že máš zálohu uloženú mimo aplikácie. Seed tu už neukladáme - na inom zariadení zadaj tých istých 12 slov.
+                        </p>
                       )}
                     </div>
 
