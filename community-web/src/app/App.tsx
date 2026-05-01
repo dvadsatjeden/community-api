@@ -282,6 +282,8 @@ const App = (): ReactElement => {
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [lightboxImageAlt, setLightboxImageAlt] = useState<string>("");
   const [isSeedVisible, setIsSeedVisible] = useState(false);
+  const [seedBackupSavedChecked, setSeedBackupSavedChecked] = useState(false);
+  const [sessionSeedLocked, setSessionSeedLocked] = useState(false);
   const [seedCopied, setSeedCopied] = useState(false);
   const [accountResetNotice, setAccountResetNotice] = useState<string | null>(null);
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
@@ -449,6 +451,8 @@ const App = (): ReactElement => {
     if (!account) {
       setEvoluReady(false);
       setIsSeedVisible(false);
+      setSeedBackupSavedChecked(false);
+      setSessionSeedLocked(false);
       setEvoluError(null);
       setIsEvoluConnecting(false);
       setLocalRsvpByEvent(new Map());
@@ -712,8 +716,24 @@ const App = (): ReactElement => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [lightboxImageUrl, detailEvent, communityDetail, isAccountModalOpen]);
 
+  useEffect(() => {
+    if (isAccountModalOpen && account?.mnemonic) {
+      setSeedBackupSavedChecked(false);
+    }
+  }, [isAccountModalOpen, account?.ownerId, account?.mnemonic]);
+
+  const confirmSeedBackedUp = (): void => {
+    if (!account?.mnemonic) return;
+    if (!seedBackupSavedChecked || !evoluReady || isEvoluConnecting) return;
+    setSessionSeedLocked(true);
+    setAccount({ ...account, mnemonic: "" });
+    setIsSeedVisible(false);
+    setSeedBackupSavedChecked(false);
+  };
+
   const createAccount = (): void => {
     const next = deriveFromMnemonic(suggestedSeed);
+    setSessionSeedLocked(false);
     setAccount(next);
     if (!saveAccountToStorage(next)) {
       setAccountResetNotice("Upozornenie: účet sa nepodarilo uložiť — pri ďalšom načítaní bude potrebné zadať seed znova.");
@@ -729,6 +749,7 @@ const App = (): ReactElement => {
     }
     setMnemonicError(null);
     const restored = deriveFromMnemonic(mnemonicInput);
+    setSessionSeedLocked(false);
     setAccount(restored);
     if (!saveAccountToStorage(restored)) {
       setAccountResetNotice("Upozornenie: účet sa nepodarilo uložiť — pri ďalšom načítaní bude potrebné zadať seed znova.");
@@ -750,6 +771,8 @@ const App = (): ReactElement => {
     setEvoluError(null);
     setIsEvoluConnecting(false);
     setIsSeedVisible(false);
+    setSeedBackupSavedChecked(false);
+    setSessionSeedLocked(false);
     setSeedCopied(false);
     setIsAccountModalOpen(false);
     setAccountResetNotice("Účet na tomto zariadení bol vymazaný.");
@@ -1683,6 +1706,18 @@ const App = (): ReactElement => {
                       <div className="dvcLabel">Záloha — 12 slov (nikomu neposielaj)</div>
                       {account.mnemonic ? (
                         <>
+                          <div className="dvcSeedBackupConfirmRow">
+                            <input
+                              id="dvc-seed-backup-ack"
+                              className="dvcSeedBackupConfirmCheckbox"
+                              type="checkbox"
+                              checked={seedBackupSavedChecked}
+                              onChange={(e) => setSeedBackupSavedChecked(e.target.checked)}
+                            />
+                            <label htmlFor="dvc-seed-backup-ack" className="dvcSeedBackupConfirmLabel">
+                              Mám seed bezpečne uložený mimo tohto zariadenia (papier, správca hesiel, …).
+                            </label>
+                          </div>
                           <div className="dvcRow" style={{ marginBottom: "10px" }}>
                             <button className="dvcBtn dvcBtnGhost" type="button" onClick={() => setIsSeedVisible((v) => !v)}>
                               {isSeedVisible ? "Skryť seed" : "Zobraziť seed"}
@@ -1699,7 +1734,26 @@ const App = (): ReactElement => {
                               <SeedTable mnemonic={account.mnemonic} />
                             </div>
                           ) : null}
+                          {seedBackupSavedChecked && (!evoluReady || isEvoluConnecting) ? (
+                            <p className="dvcMuted dvcMuted--sm" style={{ marginTop: "10px" }}>
+                              Pred potvrdením počkaj, kým bude Evolu pripravené. Ak sa pripojenie nepodarí, použij „Skúsiť znova“ nižšie.
+                            </p>
+                          ) : null}
+                          <div className="dvcRow" style={{ marginTop: "12px" }}>
+                            <button
+                              className="dvcBtn dvcBtnPrimary"
+                              type="button"
+                              onClick={confirmSeedBackedUp}
+                              disabled={!seedBackupSavedChecked || !evoluReady || isEvoluConnecting}
+                            >
+                              Potvrdiť uloženie — seed v tejto relácii už nezobrazím
+                            </button>
+                          </div>
                         </>
+                      ) : sessionSeedLocked ? (
+                        <p className="dvcMuted dvcMuted--sm">
+                          Zálohu v tejto relácii už nezobrazujeme — potvrdil si, že máš 12 slov uložených mimo tohto zariadenia.
+                        </p>
                       ) : (
                         <p className="dvcMuted dvcMuted--sm">Seed nie je v pamäti tejto relácie. Ak potrebuješ zálohu, odhláš sa a obnov účet zadaním 12 slov.</p>
                       )}
