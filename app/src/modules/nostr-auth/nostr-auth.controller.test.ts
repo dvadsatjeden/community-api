@@ -58,14 +58,28 @@ describe("deriveNostrCredentials", () => {
 });
 
 describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
+  let ORIGINAL_REDIS_URL: string | undefined;
+  let ORIGINAL_NOSTR_AUTH_SECRET: string | undefined;
+
   beforeEach(async () => {
+    ORIGINAL_REDIS_URL = process.env.REDIS_URL;
+    ORIGINAL_NOSTR_AUTH_SECRET = process.env.NOSTR_AUTH_SECRET;
     delete process.env.REDIS_URL;
     process.env.NOSTR_AUTH_SECRET = SECRET;
     await _resetNostrChallengesForTesting();
   });
 
   afterEach(async () => {
-    delete process.env.NOSTR_AUTH_SECRET;
+    if (ORIGINAL_REDIS_URL === undefined) {
+      delete process.env.REDIS_URL;
+    } else {
+      process.env.REDIS_URL = ORIGINAL_REDIS_URL;
+    }
+    if (ORIGINAL_NOSTR_AUTH_SECRET === undefined) {
+      delete process.env.NOSTR_AUTH_SECRET;
+    } else {
+      process.env.NOSTR_AUTH_SECRET = ORIGINAL_NOSTR_AUTH_SECRET;
+    }
     await _resetNostrChallengesForTesting();
   });
 

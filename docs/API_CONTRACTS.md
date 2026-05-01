@@ -103,6 +103,7 @@ Optional `REDIS_URL`: when set, auth challenges are stored in Redis with TTL (sh
   - `npub: string` — bech32 `npub1…` when encoding succeeds, else may be empty
   - Same non-cache headers as the challenge endpoint on success responses
 - Error responses: `400` with `{ error: string }` codes such as `invalid_event_signature`, `unknown_or_expired_challenge`, etc.; `503` with `nostr_auth_not_configured` or `challenge_store_unavailable` when applicable.
+- Response `500`: `{ error: "derivation_failed" }` — internal failure while deriving credentials from the verified pubkey (distinct from client validation errors); retry with a new challenge if appropriate.
 
 ## WP handoff contract
 

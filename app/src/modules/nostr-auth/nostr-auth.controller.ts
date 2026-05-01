@@ -25,6 +25,12 @@ function extractChallengeTag(event: Event): string | null {
   return null;
 }
 
+function logNostrStoreError(context: string, challengeId: string, err: unknown): void {
+  const name = err instanceof Error ? err.name : "NonError";
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(context, { challengeId, name, message });
+}
+
 /** Prevent caches/proxies from storing one-time challenges or credentials. */
 function setNoStoreAuthHeaders(res: Response): void {
   res.setHeader("Cache-Control", "no-store");
@@ -43,7 +49,7 @@ export async function nostrAuthChallengeGet(_req: Request, res: Response): Promi
     const store = await getNostrChallengeStore();
     await store.setChallenge(challengeId);
   } catch (err) {
-    console.error("[nostr-auth] getNostrChallengeStore / setChallenge failed", { challengeId, err });
+    logNostrStoreError("[nostr-auth] getNostrChallengeStore / setChallenge failed", challengeId, err);
     res.status(503).json({ error: "challenge_store_unavailable" });
     return;
   }
@@ -96,7 +102,7 @@ export async function nostrAuthVerifyPost(req: Request, res: Response): Promise<
     const store = await getNostrChallengeStore();
     consumed = await store.consumeChallenge(challengeId);
   } catch (err) {
-    console.error("[nostr-auth] getNostrChallengeStore / consumeChallenge failed", { challengeId, err });
+    logNostrStoreError("[nostr-auth] getNostrChallengeStore / consumeChallenge failed", challengeId, err);
     res.status(503).json({ error: "challenge_store_unavailable" });
     return;
   }
