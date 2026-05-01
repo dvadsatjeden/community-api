@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,7 +8,14 @@ const __dirname = path.dirname(__filename);
 const isStandalone = process.argv[2] === "standalone";
 const assetsDir = isStandalone
   ? path.resolve(__dirname, "../../standalone-dist/assets")
-  : path.resolve(__dirname, "../../../wp-content/plugins/dvadsatjeden-community/assets");
+  : path.resolve(__dirname, "../../wp-content/plugins/dvadsatjeden-community/assets");
+
+const writeAppVersionJson = () => {
+  if (!existsSync(assetsDir)) return;
+  const pkg = JSON.parse(readFileSync(path.join(__dirname, "../package.json"), "utf8"));
+  const file = path.join(assetsDir, "community-app.version.json");
+  writeFileSync(file, `${JSON.stringify({ version: String(pkg.version ?? "0") })}\n`);
+};
 
 const pickSqliteHashedWasm = () => {
   const files = readdirSync(assetsDir);
@@ -20,6 +27,7 @@ const main = () => {
   if (!existsSync(assetsDir)) {
     return;
   }
+  writeAppVersionJson();
   const hashed = pickSqliteHashedWasm();
   if (!hashed) {
     return;

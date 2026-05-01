@@ -67,6 +67,27 @@ const TOOLS: Array<{ name: string; desc: string; url: string; emoji: string; log
 const emptyCounts = (): RsvpCounts => ({ going: 0, maybe: 0, not_going: 0 });
 const RSVP_LOCAL_KEY = "d21.localRsvpByEvent";
 const DEFAULT_API_BASE_URL = "http://localhost:3021";
+
+/** Same directory as `community-app.js` — written by `postbuild-wasm-alias.mjs` after each build. */
+const resolveCommunityAppVersionCheckUrl = (): string | null => {
+  const wp = document.querySelector<HTMLScriptElement>("#dvc-community-app-js[src]");
+  if (wp?.src) {
+    try {
+      return new URL("community-app.version.json", wp.src).href;
+    } catch {
+      return null;
+    }
+  }
+  const mod = document.querySelector<HTMLScriptElement>('script[type="module"][src*="community-app.js"]');
+  if (mod?.src) {
+    try {
+      return new URL("community-app.version.json", mod.src).href;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
 const statusPillLabel = (status: RsvpStatus | undefined): string | null => {
   if (status === "going") return "IDEM";
   if (status === "maybe") return "MOŽNO";
@@ -346,11 +367,53 @@ const App = (): ReactElement => {
   }, []);
 
   useEffect(() => {
+    const versionUrl = resolveCommunityAppVersionCheckUrl();
+    if (!versionUrl) return;
+    const check = (): void => {
+      void fetch(versionUrl, { cache: "no-store", credentials: "omit" })
+        .then(async (r) => {
+          if (!r.ok) return;
+          const data = (await r.json()) as { version?: string };
+          if (typeof data.version === "string" && data.version.length > 0 && data.version !== __APP_VERSION__) {
+            setNewVersionAvailable(true);
+          }
+        })
+        .catch(() => {});
+    };
+    check();
+    const intervalId = window.setInterval(check, 3 * 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
+
     const prevController = navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (prevController) setNewVersionAvailable(true);
+    const onControllerChange = (): void => {
+      if (prevController != null) setNewVersionAvailable(true);
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+
+    const onUpdateFound = (): void => {
+      if (navigator.serviceWorker.controller != null) setNewVersionAvailable(true);
+    };
+
+    let unregisterUpdateFound: (() => void) | undefined;
+    void navigator.serviceWorker.getRegistration().then((reg) => {
+      if (!reg) return;
+      reg.addEventListener("updatefound", onUpdateFound);
+      unregisterUpdateFound = () => reg.removeEventListener("updatefound", onUpdateFound);
     });
+
+    const swUpdatePollId = window.setInterval(() => {
+      void navigator.serviceWorker.getRegistration().then((reg) => void reg?.update());
+    }, 30 * 60 * 1000);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      unregisterUpdateFound?.();
+      window.clearInterval(swUpdatePollId);
+    };
   }, []);
 
   useEffect(() => {
@@ -1587,9 +1650,16 @@ const App = (): ReactElement => {
           </div>
         ) : null}
         {newVersionAvailable ? (
-          <div className="dvcToast dvcToast--update">
-            <span className="dvcUpdateNotice">Nová verzia je dostupná</span>
-            <button className="dvcBtn dvcBtn--add" type="button" onClick={() => window.location.reload()}>
+          <div className="dvcUpdateBanner update-banner" role="alert">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            <span className="dvcUpdateBannerText text">
+              <strong>Nová verzia je dostupná.</strong> Načítaj znova pre najnovší obsah.
+            </span>
+            <button type="button" className="dvcUpdateBannerBtn" onClick={() => window.location.reload()}>
               Načítať
             </button>
           </div>
