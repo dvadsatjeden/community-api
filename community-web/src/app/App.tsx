@@ -286,16 +286,18 @@ function loadAccountFromStorage(): DerivedAccount | null {
   }
 }
 
-/** Returns true on success, false if localStorage.setItem threw (QuotaExceededError etc.). */
+/** Returns true if localStorage.setItem succeeded; false if it threw. IndexedDB is always updated with the same persist blob. */
 function saveAccountToStorage(account: DerivedAccount): boolean {
   const persist = derivedAccountToPersisted(account);
+  let localStorageOk = true;
   try {
     localStorage.setItem("d21.account", JSON.stringify(persist));
   } catch {
-    return false;
+    localStorageOk = false;
+  } finally {
+    void idbSetAccount(persist);
   }
-  void idbSetAccount(persist);
-  return true;
+  return localStorageOk;
 }
 
 const App = (): ReactElement => {
@@ -791,14 +793,16 @@ const App = (): ReactElement => {
   const confirmSeedBackedUp = (): void => {
     if (!account?.mnemonic) return;
     if (!seedBackupSavedChecked || !evoluReady || isEvoluConnecting) return;
-    const next: DerivedAccount = { ...account, mnemonic: "", seedBackedUpConfirmed: true };
-    setAccount(next);
-    setIsSeedVisible(false);
-    setSeedBackupSavedChecked(false);
+    const next: DerivedAccount = { ...account, seedBackedUpConfirmed: true };
     if (!saveAccountToStorage(next)) {
       setAccountResetNotice("Upozornenie: potvrdenie zálohy sa nepodarilo uložiť — skús znova.");
       window.setTimeout(() => setAccountResetNotice(null), 5000);
+      return;
     }
+    setAccount({ ...next, mnemonic: "" });
+    setIsSeedVisible(false);
+    setSeedBackupSavedChecked(false);
+    setAccountResetNotice(null);
   };
 
   const createAccount = (): void => {
