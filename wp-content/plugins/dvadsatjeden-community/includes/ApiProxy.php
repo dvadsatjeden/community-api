@@ -20,7 +20,7 @@ final class ApiProxy
             'permission_callback' => '__return_true',
             'callback' => static function () {
                 $settings = Settings::get();
-                return rest_ensure_response([
+                $payload = [
                     'apiBaseUrl' => $settings['api_base_url'],
                     'features' => [
                         'events' => (bool) $settings['enable_events'],
@@ -31,7 +31,26 @@ final class ApiProxy
                         'events' => $settings['events_source_url'],
                         'venues' => $settings['venues_source_url'],
                     ],
-                ]);
+                ];
+
+                $apiBase = rtrim((string) ($settings['api_base_url'] ?? ''), '/');
+                if ($apiBase !== '' && !empty($settings['enable_push'])) {
+                    $upstream = wp_remote_get($apiBase . '/v1/config', ['timeout' => 5]);
+                    if (!is_wp_error($upstream)) {
+                        $code = (int) wp_remote_retrieve_response_code($upstream);
+                        if ($code >= 200 && $code < 300) {
+                            $decoded = json_decode((string) wp_remote_retrieve_body($upstream), true);
+                            if (is_array($decoded) && isset($decoded['vapidPublicKey']) && is_string($decoded['vapidPublicKey'])) {
+                                $key = trim($decoded['vapidPublicKey']);
+                                if ($key !== '') {
+                                    $payload['vapidPublicKey'] = $key;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return rest_ensure_response($payload);
             },
         ]);
 

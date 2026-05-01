@@ -29,7 +29,7 @@ final class Shortcode
   <p style="margin: 0; padding: 12px 0; color: currentColor; opacity: 0.75;">
     Načítavam appku…
   </p>
-  <noscript>Na pouzitie komunitnej appky treba zapnuty JavaScript.</noscript>
+  <noscript>Na použitie komunitnej appky treba zapnutý JavaScript.</noscript>
 </div>
 HTML;
         // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

@@ -74,9 +74,12 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "community-api" });
 });
 
+const publicApiBaseUrl =
+  (process.env.PUBLIC_API_BASE_URL ?? process.env.API_PUBLIC_URL ?? "https://api.dvadsatjeden.org").replace(/\/$/, "");
+
 app.get("/v1/config", (_req, res) => {
   res.json({
-    apiBaseUrl: "https://api.dvadsatjeden.org",
+    apiBaseUrl: publicApiBaseUrl,
     features: { events: true, map: true, push: !!getVapidPublicKey() },
     vapidPublicKey: getVapidPublicKey(),
     sources: {
@@ -138,7 +141,8 @@ app.get("/v1/communities", async (_req, res) => {
 });
 
 app.get("/v1/communities/:id/join", joinRateLimit, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const rawId = req.params.id;
+  const id = parseInt(Array.isArray(rawId) ? (rawId[0] ?? "") : rawId, 10);
   if (isNaN(id) || id < 0) { res.status(400).json({ error: "Invalid id" }); return; }
   try {
     const url = await getCommunityUrl(id);
