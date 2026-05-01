@@ -271,6 +271,7 @@ const App = (): ReactElement => {
   const [seedCopied, setSeedCopied] = useState(false);
   const [accountResetNotice, setAccountResetNotice] = useState<string | null>(null);
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [mnemonicError, setMnemonicError] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
@@ -1722,8 +1723,28 @@ const App = (): ReactElement => {
             <span className="dvcUpdateBannerText">
               <strong>Nová verzia je dostupná.</strong> Načítaj znova pre najnovší obsah.
             </span>
-            <button type="button" className="dvcUpdateBannerBtn" onClick={() => window.location.reload()}>
-              Načítať
+            <button
+              type="button"
+              className="dvcUpdateBannerBtn"
+              disabled={isReloading}
+              onClick={() => {
+                setIsReloading(true);
+                void navigator.serviceWorker.getRegistration().then((reg) => {
+                  const sw = reg?.installing ?? reg?.waiting;
+                  if (sw) {
+                    sw.addEventListener("statechange", function handler(e) {
+                      if ((e.target as ServiceWorker).state === "activated") {
+                        sw.removeEventListener("statechange", handler);
+                        window.location.reload();
+                      }
+                    });
+                  } else {
+                    window.location.reload();
+                  }
+                });
+              }}
+            >
+              {isReloading ? "Načítavam…" : "Načítať"}
             </button>
           </div>
         ) : null}
