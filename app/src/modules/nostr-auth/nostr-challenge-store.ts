@@ -1,7 +1,8 @@
 import type { RedisClientType } from "redis";
 
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000;
-const CHALLENGE_TTL_SEC = Math.floor(CHALLENGE_TTL_MS / 1000);
+/** Redis `EX` and max `created_at` skew for verify (must match challenge lifetime). */
+export const CHALLENGE_TTL_SEC = Math.ceil(CHALLENGE_TTL_MS / 1000);
 const REDIS_KEY_PREFIX = "d21:nostr:challenge:";
 
 export interface NostrChallengeStore {
@@ -86,10 +87,15 @@ async function createStore(): Promise<NostrChallengeStore> {
 export async function getNostrChallengeStore(): Promise<NostrChallengeStore> {
   if (cachedStore) return cachedStore;
   if (!initPromise) {
-    initPromise = createStore().then((s) => {
-      cachedStore = s;
-      return s;
-    });
+    initPromise = createStore()
+      .then((s) => {
+        cachedStore = s;
+        return s;
+      })
+      .catch((err: unknown) => {
+        initPromise = null;
+        throw err;
+      });
   }
   return initPromise;
 }

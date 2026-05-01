@@ -90,7 +90,7 @@ Optional `REDIS_URL`: when set, auth challenges are stored in Redis with TTL (sh
   - `event: NostrEvent` — signed event with:
     - `kind` = `27241`
     - `tags` includes `["challenge", "<challengeId>"]` where `challengeId` was issued by the challenge endpoint (not yet consumed)
-    - `created_at` within ±10 minutes of server time
+    - `created_at` within ±5 minutes of server time (same window as challenge TTL)
     - valid Schnorr signature for `event.pubkey`
 - Response `200`:
   - `ownerId: string` — app owner id (hex prefix, same length convention as seed-derived accounts)

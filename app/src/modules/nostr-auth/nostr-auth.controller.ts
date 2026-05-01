@@ -2,12 +2,10 @@ import { randomBytes } from "node:crypto";
 import type { Request, Response } from "express";
 import { nip19, verifyEvent, type Event } from "nostr-tools";
 import { deriveNostrCredentials } from "./nostr-crypto";
-import { getNostrChallengeStore } from "./nostr-challenge-store";
+import { CHALLENGE_TTL_SEC, getNostrChallengeStore } from "./nostr-challenge-store";
 
 /** Custom auth event kind for Dvadsatjeden community-api (documented in API_CONTRACTS). */
 export const NOSTR_AUTH_EVENT_KIND = 27241;
-
-const MAX_EVENT_AGE_SEC = 10 * 60;
 
 function getSecret(): string | null {
   const s = process.env.NOSTR_AUTH_SECRET?.trim();
@@ -68,7 +66,7 @@ export async function nostrAuthVerifyPost(req: Request, res: Response): Promise<
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-  if (typeof event.created_at !== "number" || Math.abs(nowSec - event.created_at) > MAX_EVENT_AGE_SEC) {
+  if (typeof event.created_at !== "number" || Math.abs(nowSec - event.created_at) > CHALLENGE_TTL_SEC) {
     res.status(400).json({ error: "invalid_event_time" });
     return;
   }
