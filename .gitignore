@@ -35,6 +35,9 @@ wp-content/plugins/dvadsatjeden-community/assets/index.html
 data/
 app/data/
 
+# Vite build stamp (postbuild reads it; not needed in git)
+**/.dvc-build-meta.json
+
 # Misc
 .DS_Store
 *.log
