@@ -10,6 +10,8 @@ interface ImportMeta {
 }
 
 declare const __APP_VERSION__: string;
+/** Krátky hash na build; pri `vite dev` je `"dev"`. */
+declare const __APP_BUILD_ID__: string;
 
 declare global {
   interface Window {

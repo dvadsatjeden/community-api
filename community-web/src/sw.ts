@@ -4,6 +4,19 @@ import { clientsClaim } from "workbox-core";
 
 declare const self: ServiceWorkerGlobalScope;
 
+// Manifest verzie musí ísť vždy na sieť (signal nového deployu). Nie je v precache.
+// Nesmie ho obsluhovať SW cache — inak sa neprejaví nový build.
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  try {
+    const url = new URL(event.request.url);
+    if (url.origin !== self.location.origin) return;
+    if (url.pathname.endsWith("/community-app.version.json")) return;
+  } catch {
+    /* ignore */
+  }
+});
+
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 self.skipWaiting();

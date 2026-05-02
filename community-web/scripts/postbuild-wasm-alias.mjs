@@ -12,6 +12,28 @@ const assetsDir = isStandalone
 
 const writeAppVersionJson = () => {
   if (!existsSync(assetsDir)) return;
+  const metaPathCandidates = [
+    path.join(assetsDir, ".dvc-build-meta.json"),
+    path.join(assetsDir, "..", ".dvc-build-meta.json"),
+  ];
+  const metaPath = metaPathCandidates.find((p) => existsSync(p));
+  if (metaPath) {
+    try {
+      const meta = JSON.parse(readFileSync(metaPath, "utf8"));
+      const file = path.join(assetsDir, "community-app.version.json");
+      writeFileSync(
+        file,
+        `${JSON.stringify({
+          version: String(meta.version ?? ""),
+          buildId: String(meta.buildId ?? ""),
+          builtAt: typeof meta.builtAt === "string" ? meta.builtAt : new Date().toISOString(),
+        })}\n`,
+      );
+      return;
+    } catch {
+      /* fall through — legacy */
+    }
+  }
   const pkg = JSON.parse(readFileSync(path.join(__dirname, "../package.json"), "utf8"));
   const file = path.join(assetsDir, "community-app.version.json");
   writeFileSync(file, `${JSON.stringify({ version: String(pkg.version ?? "0") })}\n`);
