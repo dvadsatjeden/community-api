@@ -26,8 +26,52 @@ function humanizeNostrAuthError(code: string): string {
     unknown_or_expired_challenge: "Výzva expirovala — skús znova.",
     invalid_verify_payload: "Neočakávaná odpoveď servera.",
     server_challenge_kind_mismatch: "Server vrátil neočakávaný typ výzvy.",
+    challenge_store_unavailable: "Server nedokáže uložiť výzvu (Redis/cache). Skús neskôr.",
+    missing_challenge_tag: "Chýba tag výzvy v podpísanej udalosti.",
+    /** Často plain string z nip46 `reject()`, nie Error.message */
+    "subscription closed before connection was established.":
+      "Spojenie s bunkerom sa uzavrelo skôr, než sa podarilo pripojiť — skús znova alebo skontroluj relay.",
+    "no relays specified for this bunker": "V odkaze nie sú žiadne relay — doplni ich alebo použij iný bunker URL.",
+    duplicate_url: "Duplicitný relay v zozname.",
+    "connection skipped by allowConnectingToRelay": "Pripojenie na relay bolo zablokované.",
   };
-  return map[code] ?? code.replace(/_/g, " ");
+  const trimmed = code.trim();
+  if (map[trimmed]) return map[trimmed];
+  if (trimmed.startsWith("connection failure:"))
+    return `Nepodarilo sa pripojiť na relay: ${trimmed.slice("connection failure:".length).trim()}`;
+  if (trimmed.includes("improperly signed"))
+    return "Bunker vrátil neplatný podpis udalosti — skús iný klient alebo znova.";
+  return trimmed.replace(/_/g, " ");
+}
+
+/** nip46 často rejectuje string namiesto Error → starý catch ukazoval vždy „nostr login failed“. */
+function nostrAuthErrorToCode(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
+    return (e as { message: string }).message;
+  }
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return "nostr_login_failed";
+  }
+}
+
+/** `bunker://` regex v nostr-tools vyžaduje hex pubkey v lowercase. */
+function normalizeBunkerConnectionInput(raw: string): string {
+  const s = raw.trim();
+  const m = s.match(/^bunker:\/\/([0-9A-Fa-f]{64})(\?[\s\S]*)?$/i);
+  if (!m) return s;
+  return `bunker://${m[1].toLowerCase()}${m[2] ?? ""}`;
+}
+
+function isNostrConnectUri(raw: string): boolean {
+  try {
+    return new URL(raw.trim()).protocol === "nostrconnect:";
+  } catch {
+    return false;
+  }
 }
 
 function buildAuthTemplate(challengeId: string): EventTemplate {
@@ -78,8 +122,7 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
         onSuccess(account);
         onClose();
       } catch (e) {
-        const raw = e instanceof Error ? e.message : "nostr_login_failed";
-        setError(humanizeNostrAuthError(raw));
+        setError(humanizeNostrAuthError(nostrAuthErrorToCode(e)));
       } finally {
         setBusy(false);
       }
@@ -99,14 +142,31 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
 
   const onNip46 = (): void => {
     void runVerify(async (tpl) => {
-      const raw = bunkerInput.trim();
-      if (!raw) throw new Error("bunker_url_required");
-      const bp = await parseBunkerInput(raw);
-      if (!bp) throw new Error("invalid_bunker_url");
+      const rawIn = bunkerInput.trim();
+      if (!rawIn) throw new Error("bunker_url_required");
+      const raw = normalizeBunkerConnectionInput(rawIn);
+
       const pool = new SimplePool();
+      const bunkerSignerOpts = {
+        pool,
+        onauth: (authUrl: string) => {
+          try {
+            window.open(authUrl, "_blank", "noopener,noreferrer");
+          } catch {
+            /* ignore */
+          }
+        },
+      };
+
       let signer: BunkerSigner | null = null;
       try {
-        signer = BunkerSigner.fromBunker(generateSecretKey(), bp, { pool });
+        if (isNostrConnectUri(raw)) {
+          signer = await BunkerSigner.fromURI(generateSecretKey(), raw, bunkerSignerOpts, 300_000);
+        } else {
+          const bp = await parseBunkerInput(raw);
+          if (!bp) throw new Error("invalid_bunker_url");
+          signer = BunkerSigner.fromBunker(generateSecretKey(), bp, bunkerSignerOpts);
+        }
         await signer.connect();
         return await signer.signEvent(tpl);
       } finally {
@@ -115,7 +175,7 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
         } catch {
           /* ignore close errors */
         }
-        pool.close(bp.relays);
+        pool.destroy();
       }
     });
   };
