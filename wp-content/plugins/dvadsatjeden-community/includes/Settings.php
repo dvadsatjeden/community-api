@@ -28,6 +28,7 @@ final class Settings
     {
         return [
             'api_base_url' => '',
+            'standalone_app_url' => 'https://app.dvadsatjeden.org',
             'import_secret' => '',
             'events_source_url' => 'https://prevadzky.dvadsatjeden.org/wp-json/dvadsatjeden-events/v1/list?country=sk',
             'venues_source_url' => 'https://prevadzky.dvadsatjeden.org',
@@ -50,6 +51,7 @@ final class Settings
 
         return [
             'api_base_url' => esc_url_raw($values['api_base_url']),
+            'standalone_app_url' => esc_url_raw($values['standalone_app_url']),
             'import_secret' => sanitize_text_field($values['import_secret']),
             'events_source_url' => esc_url_raw($values['events_source_url']),
             'venues_source_url' => esc_url_raw($values['venues_source_url']),

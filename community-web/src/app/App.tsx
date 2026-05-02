@@ -9,6 +9,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./community-app.css";
 import { dateParts, TZ } from "./utils";
+import { EmbeddedOnly, usePlatform } from "./platform";
 import logoMempoolUrl from "./logos/logo-mempool.svg?url";
 import logoBtcmapUrl from "./logos/logo-btcmap.svg?url";
 import logoBtcpayUrl from "./logos/logo-btcpay.svg?url";
@@ -360,11 +361,7 @@ const App = (): ReactElement => {
   const [pushLoading, setPushLoading] = useState(false);
   const [eventsFeature, setEventsFeature] = useState(true);
   const [mapFeature, setMapFeature] = useState(true);
-  const [mode] = useState<"embedded" | "standalone">(() => {
-    const el = document.getElementById("dvadsatjeden-community-app");
-    const url = el?.dataset.configUrl ?? "/wp-json/dvadsatjeden/v1/config";
-    return url.includes("/wp-json/") ? "embedded" : "standalone";
-  });
+  const { mode, standaloneAppUrl, setStandaloneAppUrl } = usePlatform();
   const [configUrl, setConfigUrl] = useState(() => {
     const el = document.getElementById("dvadsatjeden-community-app");
     return el?.dataset.configUrl ?? "/wp-json/dvadsatjeden/v1/config";
@@ -646,6 +643,7 @@ const App = (): ReactElement => {
         if (!r.ok) throw new Error(String(r.status));
         return r.json() as Promise<{
           apiBaseUrl?: string;
+          standaloneAppUrl?: string;
           vapidPublicKey?: string;
           features?: { events?: boolean; map?: boolean; push?: boolean; nostrLogin?: boolean };
         }>;
@@ -656,6 +654,8 @@ const App = (): ReactElement => {
         } else {
           setApiBaseUrl(fallbackFromMount());
         }
+        const sau = typeof cfg.standaloneAppUrl === "string" ? cfg.standaloneAppUrl.trim() : "";
+        setStandaloneAppUrl(sau.length > 0 ? sau : null);
         if (typeof cfg.vapidPublicKey === "string" && cfg.vapidPublicKey.trim().length > 0) {
           setVapidPublicKey(cfg.vapidPublicKey.trim());
         }
@@ -664,8 +664,11 @@ const App = (): ReactElement => {
         if (cfg.features?.push === true) setPushFeature(true);
         setNostrLogin(cfg.features?.nostrLogin === true);
       })
-      .catch(() => setApiBaseUrl(fallbackFromMount()));
-  }, [configUrl]);
+      .catch(() => {
+        setApiBaseUrl(fallbackFromMount());
+        setStandaloneAppUrl(null);
+      });
+  }, [configUrl, setStandaloneAppUrl]);
 
   useEffect(() => {
     if (!eventsFeature) {
@@ -1331,7 +1334,7 @@ const App = (): ReactElement => {
         </div>
         </>) : null}
 
-        {/* ── Úvod view (standalone only) ── */}
+        {/* ── Úvod view ── */}
         {view === "uvod" ? (
           <div className="dvcUvodView">
             <header className="dvcUvodHeader">
@@ -1346,23 +1349,38 @@ const App = (): ReactElement => {
 
             <section className="dvcUvodSection">
               <h2 className="dvcUvodSectionTitle">Kde začať</h2>
-              <div className="dvcKdeZacat">
-                <p className="dvcMuted">
-                  Dvadsatjeden je komunita, ktorá prepája Bitcoinerov, šíri osvetu a edukuje.
-                  Pravidelne organizujeme meetupy, Bitcoin pivo stretnutia a konferencie.
-                  Najrýchlejšie sa zapojíš cez Signal skupinu — tam sa dozvieš o novinkách ako prvý.
-                </p>
-                <div className="dvcRow">
-                  <button
-                    className="dvcBtn dvcBtnPrimary"
-                    type="button"
-                    onClick={() => (mapFeature ? setView("map") : setView("info"))}
-                  >
-                    Pripojiť sa do skupiny
-                  </button>
-                  <a className="dvcBtn dvcBtnGhost" href="https://www.dvadsatjeden.org" target="_blank" rel="noreferrer">
-                    Viac o komunite
-                  </a>
+              <div className="dvcKdeZacatStack">
+                <EmbeddedOnly>
+                  {standaloneAppUrl ? (
+                    <div className="dvcKdeZacatCard">
+                      <h3 className="dvcKdeZacatCardTitle">Úvod</h3>
+                      <p className="dvcMuted">
+                        Komunitná appka ako samostatná PWA — inštalácia do zariadenia, offline režim a push upozornenia.
+                      </p>
+                      <a className="dvcBtn dvcBtnPrimary" href={standaloneAppUrl} target="_blank" rel="noreferrer">
+                        Otvoriť v appke
+                      </a>
+                    </div>
+                  ) : null}
+                </EmbeddedOnly>
+                <div className="dvcKdeZacat">
+                  <p className="dvcMuted">
+                    Dvadsatjeden je komunita, ktorá prepája Bitcoinerov, šíri osvetu a edukuje.
+                    Pravidelne organizujeme meetupy, Bitcoin pivo stretnutia a konferencie.
+                    Najrýchlejšie sa zapojíš cez Signal skupinu — tam sa dozvieš o novinkách ako prvý.
+                  </p>
+                  <div className="dvcRow">
+                    <button
+                      className="dvcBtn dvcBtnPrimary"
+                      type="button"
+                      onClick={() => (mapFeature ? setView("map") : setView("info"))}
+                    >
+                      Pripojiť sa do skupiny
+                    </button>
+                    <a className="dvcBtn dvcBtnGhost" href="https://www.dvadsatjeden.org" target="_blank" rel="noreferrer">
+                      Viac o komunite
+                    </a>
+                  </div>
                 </div>
               </div>
             </section>

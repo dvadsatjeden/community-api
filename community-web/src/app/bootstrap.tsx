@@ -4,6 +4,7 @@ import "./navigatorLocksPolyfill";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { DvcEvoluProvider } from "./evolu/dvcEvolu";
+import { PlatformProvider } from "./platform";
 import { App } from "./App";
 import "./community-app.css";
 
@@ -60,7 +61,9 @@ if (rootElement) {
     window.__DVC_APP__ = { bootedAt: new Date().toISOString() };
     createRoot(rootElement).render(
       <DvcEvoluProvider>
-        <App />
+        <PlatformProvider>
+          <App />
+        </PlatformProvider>
       </DvcEvoluProvider>
     );
   } catch (error) {

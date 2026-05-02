@@ -43,6 +43,13 @@ final class AdminPage
                         <td><input name="dvadsatjeden_community_settings[api_base_url]" id="api_base_url" type="url" class="regular-text" value="<?php echo esc_attr($settings['api_base_url']); ?>"></td>
                     </tr>
                     <tr>
+                        <th scope="row"><label for="standalone_app_url">Standalone app URL</label></th>
+                        <td>
+                            <input name="dvadsatjeden_community_settings[standalone_app_url]" id="standalone_app_url" type="url" class="regular-text" value="<?php echo esc_attr($settings['standalone_app_url']); ?>">
+                            <p class="description">URL plnej PWA (napr. <code>https://app.dvadsatjeden.org</code>). Zobrazí sa ako odkaz v embed appke na stránke Úvod.</p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row"><label for="import_secret">Import Secret</label></th>
                         <td>
                             <input name="dvadsatjeden_community_settings[import_secret]" id="import_secret" type="password" class="regular-text" value="<?php echo esc_attr($settings['import_secret']); ?>" autocomplete="new-password">
