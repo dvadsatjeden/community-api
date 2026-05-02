@@ -12,12 +12,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginAssets = path.resolve(__dirname, "../wp-content/plugins/dvadsatjeden-community/assets");
 
+/** Deterministic z `package.json` — rovnaký dôvod ako `vite.config.standalone.ts`. */
 function computeBuildId(pkgJsonPath: string): string {
-  return createHash("sha256")
-    .update(readFileSync(pkgJsonPath, "utf8"))
-    .update(String(Date.now()))
-    .digest("hex")
-    .slice(0, 10);
+  return createHash("sha256").update(readFileSync(pkgJsonPath, "utf8")).digest("hex").slice(0, 10);
 }
 
 function writeWpBuildMetaPlugin(outputRoot: string, version: string, buildId: string): Plugin {

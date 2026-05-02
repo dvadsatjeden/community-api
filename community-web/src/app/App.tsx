@@ -70,7 +70,7 @@ const emptyCounts = (): RsvpCounts => ({ going: 0, maybe: 0, not_going: 0 });
 const RSVP_LOCAL_KEY = "d21.localRsvpByEvent";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_DEFAULT_API_BASE_URL ?? "http://localhost:3021";
 
-/** Same directory as `community-app.js` — written by `postbuild-wasm-alias.mjs` after each build. */
+/** Same directory as `community-app.js` — written at build do `assets/`. */
 const resolveCommunityAppVersionCheckUrl = (): string | null => {
   const wp = document.querySelector<HTMLScriptElement>("#dvc-community-app-js[src]");
   if (wp?.src) {
@@ -84,6 +84,15 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   if (mod?.src) {
     try {
       return new URL("community-app.version.json", mod.src).href;
+    } catch {
+      return null;
+    }
+  }
+  const root = document.getElementById("dvadsatjeden-community-app");
+  const configUrl = root?.dataset.configUrl ?? "";
+  if (configUrl && !configUrl.includes("/wp-json/")) {
+    try {
+      return new URL("/assets/community-app.version.json", window.location.origin).href;
     } catch {
       return null;
     }
@@ -2019,17 +2028,23 @@ const App = (): ReactElement => {
                 void (async () => {
                   try {
                     if ("serviceWorker" in navigator) {
-                      const reg = await navigator.serviceWorker.getRegistration();
-                      if (reg) await reg.unregister();
+                      const regs = await navigator.serviceWorker.getRegistrations();
+                      await Promise.all(regs.map((r) => r.unregister()));
                     }
                     if ("caches" in window) {
                       const keys = await caches.keys();
                       await Promise.all(keys.map((k) => caches.delete(k)));
                     }
                   } catch {
-                    /* best-effort; aj tak reload */
+                    /* best-effort; aj tak navigácia */
                   }
-                  window.location.reload();
+                  try {
+                    const u = new URL(window.location.href);
+                    u.searchParams.set("dvc_sw", String(Date.now()));
+                    window.location.replace(u.href);
+                  } catch {
+                    window.location.replace(`${window.location.pathname}?dvc_sw=${Date.now()}${window.location.hash}`);
+                  }
                 })();
               }}
             >

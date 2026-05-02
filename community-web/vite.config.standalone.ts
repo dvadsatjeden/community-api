@@ -13,18 +13,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const outDir = path.resolve(__dirname, "../standalone-dist");
 
+/** Deterministic per `package.json` — avoids mismatch when Vite evaluates config more than once. */
 function computeBuildId(pkgJsonPath: string): string {
-  return createHash("sha256")
-    .update(readFileSync(pkgJsonPath, "utf8"))
-    .update(String(Date.now()))
-    .digest("hex")
-    .slice(0, 10);
+  return createHash("sha256").update(readFileSync(pkgJsonPath, "utf8")).digest("hex").slice(0, 10);
 }
 
 /**
- * Zápis `community-app.version.json` + `.dvc-build-meta.json` až v `closeBundle` (po PWA),
- * aby `buildId` sedel s `define` z rovnakého behu buildu. Súbor **nie** v Workbox precache
- * (ako `version.json` u jednadvacet) — fetch ide vždy na sieť ako signál nového deployu.
+ * Zápis `community-app.version.json` + `.dvc-build-meta.json` až v `closeBundle` (po PWA).
+ * `buildId` je deterministický z `package.json` (žiadny `Date.now()` v hashi), aby sedel s `define`
+ * aj keď Vite vyhodnotí konfig viackrát. Súbor **nie** v Workbox precache — fetch ide na sieť.
  */
 function writeStandaloneBuildMetaPlugin(
   outputRoot: string,
