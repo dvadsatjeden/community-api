@@ -70,7 +70,7 @@ const emptyCounts = (): RsvpCounts => ({ going: 0, maybe: 0, not_going: 0 });
 const RSVP_LOCAL_KEY = "d21.localRsvpByEvent";
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_DEFAULT_API_BASE_URL ?? "http://localhost:3021";
 
-/** Same directory as `community-app.js` — written by `postbuild-wasm-alias.mjs` after each build. */
+/** Same directory as `community-app.js` — written at build do `assets/`. */
 const resolveCommunityAppVersionCheckUrl = (): string | null => {
   const wp = document.querySelector<HTMLScriptElement>("#dvc-community-app-js[src]");
   if (wp?.src) {
@@ -84,6 +84,15 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   if (mod?.src) {
     try {
       return new URL("community-app.version.json", mod.src).href;
+    } catch {
+      return null;
+    }
+  }
+  const root = document.getElementById("dvadsatjeden-community-app");
+  const configUrl = root?.dataset.configUrl ?? "";
+  if (configUrl && !configUrl.includes("/wp-json/")) {
+    try {
+      return new URL("/assets/community-app.version.json", window.location.origin).href;
     } catch {
       return null;
     }
@@ -105,6 +114,44 @@ const withVersionCheckCacheBust = (absoluteUrl: string): string => {
 
 const LOCAL_SEMVER = String(__APP_VERSION__).trim();
 const MY_BUILD_ID = String(__APP_BUILD_ID__).trim();
+
+/** Standalone PWA registruje `/sw.js` (registerSW.js). Neukončujeme cudzie SW na tom istom origine. */
+const DVC_SW_SCRIPT_PATH_SUFFIX = "/sw.js";
+
+function dvcServiceWorkerScriptMatchesOurSw(scriptUrl: string | undefined): boolean {
+  if (!scriptUrl) return false;
+  try {
+    return new URL(scriptUrl).pathname.endsWith(DVC_SW_SCRIPT_PATH_SUFFIX);
+  } catch {
+    return false;
+  }
+}
+
+/** Workbox 7: `prefix-cacheId-suffix` so suffix = registration.scope (pozri sw bundle). */
+function dvcWorkboxManagedCacheNamesForScope(scope: string): string[] {
+  return [`workbox-precache-v2-${scope}`, `workbox-runtime-${scope}`];
+}
+
+async function dvcUnregisterOurStandaloneSwAndCaches(): Promise<void> {
+  if (!("serviceWorker" in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return;
+  if (
+    !dvcServiceWorkerScriptMatchesOurSw(
+      registration.installing?.scriptURL ??
+        registration.waiting?.scriptURL ??
+        registration.active?.scriptURL,
+    )
+  ) {
+    return;
+  }
+  const scope = registration.scope;
+  await registration.unregister();
+
+  if (!("caches" in window)) return;
+  const cacheNames = dvcWorkboxManagedCacheNamesForScope(scope);
+  await Promise.all(cacheNames.map((name) => caches.delete(name)));
+}
 
 const statusPillLabel = (status: RsvpStatus | undefined): string | null => {
   if (status === "going") return "IDEM";
@@ -2018,18 +2065,17 @@ const App = (): ReactElement => {
                 setIsReloading(true);
                 void (async () => {
                   try {
-                    if ("serviceWorker" in navigator) {
-                      const reg = await navigator.serviceWorker.getRegistration();
-                      if (reg) await reg.unregister();
-                    }
-                    if ("caches" in window) {
-                      const keys = await caches.keys();
-                      await Promise.all(keys.map((k) => caches.delete(k)));
-                    }
+                    await dvcUnregisterOurStandaloneSwAndCaches();
                   } catch {
-                    /* best-effort; aj tak reload */
+                    /* best-effort; aj tak navigácia */
                   }
-                  window.location.reload();
+                  try {
+                    const u = new URL(window.location.href);
+                    u.searchParams.set("dvc_sw", String(Date.now()));
+                    window.location.replace(u.href);
+                  } catch {
+                    window.location.replace(`${window.location.pathname}?dvc_sw=${Date.now()}${window.location.hash}`);
+                  }
                 })();
               }}
             >

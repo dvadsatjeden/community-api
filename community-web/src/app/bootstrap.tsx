@@ -8,6 +8,18 @@ import { PlatformProvider } from "./platform";
 import { App } from "./App";
 import "./community-app.css";
 
+/** Odstránenie cache-bust query po „Načítať“ v update banneri (App.tsx). */
+try {
+  const u = new URL(window.location.href);
+  if (u.searchParams.has("dvc_sw")) {
+    u.searchParams.delete("dvc_sw");
+    const next = `${u.pathname}${u.search}${u.hash}`;
+    window.history.replaceState({}, "", next || "/");
+  }
+} catch {
+  /* ignore */
+}
+
 declare global {
   interface Window {
     __DVC_APP__?: { bootedAt: string };
