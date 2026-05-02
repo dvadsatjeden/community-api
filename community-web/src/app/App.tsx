@@ -91,11 +91,7 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   return null;
 };
 
-/**
- * WP/CDN často držia .json bez ?ver=; obídenie proxy cache pri kontrole aktualizácie.
- * Nepoužívať keď aktívny Service Worker spravuje precache — query `_cb` mení URL a Workbox
- * neservuje `community-app.version.json` z toho istého buildu ako `community-app.js` (nekonečný banner).
- */
+/** Obídenie CDN/proxy cache pri kontrole deployu (rovnaký nápad ako jednadvacet `?t=`). */
 const withVersionCheckCacheBust = (absoluteUrl: string): string => {
   try {
     const u = new URL(absoluteUrl);
@@ -107,7 +103,8 @@ const withVersionCheckCacheBust = (absoluteUrl: string): string => {
   }
 };
 
-const LOCAL_BUNDLE_VERSION = String(__APP_VERSION__).trim();
+const LOCAL_SEMVER = String(__APP_VERSION__).trim();
+const MY_BUILD_ID = String(__APP_BUILD_ID__).trim();
 
 const statusPillLabel = (status: RsvpStatus | undefined): string | null => {
   if (status === "going") return "IDEM";
@@ -417,20 +414,26 @@ const App = (): ReactElement => {
   const runServerVersionCheck = useCallback((): void => {
     const versionUrl = resolveCommunityAppVersionCheckUrl();
     if (!versionUrl) return;
-    const swControlsPage =
-      typeof navigator !== "undefined" && navigator.serviceWorker?.controller != null;
-    const fetchUrl = swControlsPage ? versionUrl : withVersionCheckCacheBust(versionUrl);
+    if (MY_BUILD_ID === "dev") {
+      setNewVersionAvailable(false);
+      return;
+    }
+    const fetchUrl = withVersionCheckCacheBust(versionUrl);
     void fetch(fetchUrl, { cache: "no-store", credentials: "omit" })
       .then(async (r) => {
         if (!r.ok) return;
-        const data = (await r.json()) as { version?: string };
+        const data = (await r.json()) as { version?: string; buildId?: string };
+        const remoteBuildId = typeof data.buildId === "string" ? data.buildId.trim() : "";
         const remoteVer = typeof data.version === "string" ? data.version.trim() : "";
-        if (!remoteVer) return;
-        if (remoteVer === LOCAL_BUNDLE_VERSION) {
-          setNewVersionAvailable(false);
+        if (remoteBuildId && MY_BUILD_ID) {
+          setNewVersionAvailable(remoteBuildId !== MY_BUILD_ID);
           return;
         }
-        setNewVersionAvailable(true);
+        if (remoteVer && LOCAL_SEMVER) {
+          setNewVersionAvailable(remoteVer !== LOCAL_SEMVER);
+          return;
+        }
+        setNewVersionAvailable(false);
       })
       .catch(() => {});
   }, []);
@@ -538,13 +541,20 @@ const App = (): ReactElement => {
     if (!resolveCommunityAppVersionCheckUrl()) return;
     runServerVersionCheck();
     const intervalId = window.setInterval(runServerVersionCheck, 3 * 60 * 1000);
-    return () => window.clearInterval(intervalId);
+    const onVis = (): void => {
+      if (document.visibilityState === "visible") runServerVersionCheck();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [runServerVersionCheck]);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    /** Nový SW môže pribúdať bez zmeny semver (hashe chunky) — pravdu berieme iba z `community-app.version.json`. */
+    /** Nový SW / deploy — po `updatefound` znova skontrolujeme `community-app.version.json` zo siete. */
     let debounced: ReturnType<typeof setTimeout> | undefined;
     const scheduleVersionRecheck = (): void => {
       window.clearTimeout(debounced);
@@ -1613,7 +1623,8 @@ const App = (): ReactElement => {
               <h2 className="dvcCardTitle">O aplikácii</h2>
               <p className="dvcMuted" style={{ marginBottom: "10px" }}>Komunitná aplikácia pre Bitcoinerov na Slovensku. Sleduj eventy, oznam účasť anonymne — bez registrácie, len 12 slov ako kľúč.</p>
               <p className="dvcMuted">
-                Verzia {__APP_VERSION__} ·{" "}
+                Verzia {__APP_VERSION__}
+                {MY_BUILD_ID !== "dev" ? ` (${MY_BUILD_ID})` : null} ·{" "}
                 <a href="https://dvadsatjeden.org" target="_blank" rel="noreferrer">dvadsatjeden.org</a>
               </p>
             </div>
@@ -2005,7 +2016,21 @@ const App = (): ReactElement => {
               disabled={isReloading}
               onClick={() => {
                 setIsReloading(true);
-                window.location.reload();
+                void (async () => {
+                  try {
+                    if ("serviceWorker" in navigator) {
+                      const reg = await navigator.serviceWorker.getRegistration();
+                      if (reg) await reg.unregister();
+                    }
+                    if ("caches" in window) {
+                      const keys = await caches.keys();
+                      await Promise.all(keys.map((k) => caches.delete(k)));
+                    }
+                  } catch {
+                    /* ako jednadvacet: aj tak reload */
+                  }
+                  window.location.reload();
+                })();
               }}
             >
               {isReloading ? "Načítavam…" : "Načítať"}
