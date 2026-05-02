@@ -91,7 +91,7 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   return null;
 };
 
-/** Obídenie CDN/proxy cache pri kontrole deployu (query s časovou pečiatkou). */
+/** Obídenie CDN/proxy cache pri kontrole deployu (časová pečiatka v query; podobne ako jednadvacet `?t=`). */
 const withVersionCheckCacheBust = (absoluteUrl: string): string => {
   try {
     const u = new URL(absoluteUrl);
