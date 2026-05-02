@@ -134,24 +134,23 @@ function dvcWorkboxManagedCacheNamesForScope(scope: string): string[] {
 
 async function dvcUnregisterOurStandaloneSwAndCaches(): Promise<void> {
   if (!("serviceWorker" in navigator)) return;
-  const regs = await navigator.serviceWorker.getRegistrations();
-  const ours = regs.filter((r) =>
-    dvcServiceWorkerScriptMatchesOurSw(
-      r.installing?.scriptURL ?? r.waiting?.scriptURL ?? r.active?.scriptURL,
-    ),
-  );
-  const scopes = new Set(ours.map((r) => r.scope));
-  await Promise.all(ours.map((r) => r.unregister()));
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return;
+  if (
+    !dvcServiceWorkerScriptMatchesOurSw(
+      registration.installing?.scriptURL ??
+        registration.waiting?.scriptURL ??
+        registration.active?.scriptURL,
+    )
+  ) {
+    return;
+  }
+  const scope = registration.scope;
+  await registration.unregister();
 
-  if (!("caches" in window) || scopes.size === 0) return;
-  const keys = await caches.keys();
-  const toDelete = keys.filter((name) => {
-    for (const scope of scopes) {
-      if (dvcWorkboxManagedCacheNamesForScope(scope).includes(name)) return true;
-    }
-    return false;
-  });
-  await Promise.all(toDelete.map((k) => caches.delete(k)));
+  if (!("caches" in window)) return;
+  const cacheNames = dvcWorkboxManagedCacheNamesForScope(scope);
+  await Promise.all(cacheNames.map((name) => caches.delete(name)));
 }
 
 const statusPillLabel = (status: RsvpStatus | undefined): string | null => {

@@ -4,14 +4,14 @@
  * Poradie:
  * 1. Prvá neprázdna env premenná: `DEPLOY_REVISION`, `CI_COMMIT_SHA`, `GITHUB_SHA`
  *    (normálne git SHA alebo CI revízia) — ideálne pre dedikované standalone deploye.
- * 2. Inak SHA256(`package.json` + obsah všetkých súborov pod `src/`), aby sa ID zmenilo
- *    pri každej zmene zdrojákov bez bumpu verzie v package.json.
+ * 2. Inak SHA256(`package.json` + obsah všetkých súborov pod `src/`), pričom do hashu vstupujú
+ *    cesty relatívne ku `src/` v POSIX tvare (`/`), nie absolútne cesty — stabilné naprieč CI/OS.
  *
  * Výstup je vždy prvých 10 hex znakov SHA256.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 
 const REV_ENV_KEYS = ["DEPLOY_REVISION", "CI_COMMIT_SHA", "GITHUB_SHA"] as const;
 
@@ -21,6 +21,11 @@ function collectSrcFiles(dir: string, out: string[]): void {
     if (ent.isDirectory()) collectSrcFiles(p, out);
     else out.push(p);
   }
+}
+
+/** Relatívna cesta od `srcRoot`, vždy POSIX `/` — stabilný digest naprieč CI/OS. */
+function srcRelativePosix(srcRoot: string, absolutePath: string): string {
+  return relative(srcRoot, absolutePath).split(sep).join("/");
 }
 
 export function computeDvcBuildId(pkgJsonPath: string, srcRoot: string): string {
@@ -35,7 +40,7 @@ export function computeDvcBuildId(pkgJsonPath: string, srcRoot: string): string 
   collectSrcFiles(srcRoot, files);
   files.sort();
   for (const f of files) {
-    h.update(f);
+    h.update(srcRelativePosix(srcRoot, f));
     h.update(readFileSync(f));
   }
   return h.digest("hex").slice(0, 10);
