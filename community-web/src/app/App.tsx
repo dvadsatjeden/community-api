@@ -115,6 +115,45 @@ const withVersionCheckCacheBust = (absoluteUrl: string): string => {
 const LOCAL_SEMVER = String(__APP_VERSION__).trim();
 const MY_BUILD_ID = String(__APP_BUILD_ID__).trim();
 
+/** Standalone PWA registruje `/sw.js` (registerSW.js). Neukončujeme cudzie SW na tom istom origine. */
+const DVC_SW_SCRIPT_PATH_SUFFIX = "/sw.js";
+
+function dvcServiceWorkerScriptMatchesOurSw(scriptUrl: string | undefined): boolean {
+  if (!scriptUrl) return false;
+  try {
+    return new URL(scriptUrl).pathname.endsWith(DVC_SW_SCRIPT_PATH_SUFFIX);
+  } catch {
+    return false;
+  }
+}
+
+/** Workbox 7: `prefix-cacheId-suffix` so suffix = registration.scope (pozri sw bundle). */
+function dvcWorkboxManagedCacheNamesForScope(scope: string): string[] {
+  return [`workbox-precache-v2-${scope}`, `workbox-runtime-${scope}`];
+}
+
+async function dvcUnregisterOurStandaloneSwAndCaches(): Promise<void> {
+  if (!("serviceWorker" in navigator)) return;
+  const regs = await navigator.serviceWorker.getRegistrations();
+  const ours = regs.filter((r) =>
+    dvcServiceWorkerScriptMatchesOurSw(
+      r.installing?.scriptURL ?? r.waiting?.scriptURL ?? r.active?.scriptURL,
+    ),
+  );
+  const scopes = new Set(ours.map((r) => r.scope));
+  await Promise.all(ours.map((r) => r.unregister()));
+
+  if (!("caches" in window) || scopes.size === 0) return;
+  const keys = await caches.keys();
+  const toDelete = keys.filter((name) => {
+    for (const scope of scopes) {
+      if (dvcWorkboxManagedCacheNamesForScope(scope).includes(name)) return true;
+    }
+    return false;
+  });
+  await Promise.all(toDelete.map((k) => caches.delete(k)));
+}
+
 const statusPillLabel = (status: RsvpStatus | undefined): string | null => {
   if (status === "going") return "IDEM";
   if (status === "maybe") return "MOŽNO";
@@ -2027,14 +2066,7 @@ const App = (): ReactElement => {
                 setIsReloading(true);
                 void (async () => {
                   try {
-                    if ("serviceWorker" in navigator) {
-                      const regs = await navigator.serviceWorker.getRegistrations();
-                      await Promise.all(regs.map((r) => r.unregister()));
-                    }
-                    if ("caches" in window) {
-                      const keys = await caches.keys();
-                      await Promise.all(keys.map((k) => caches.delete(k)));
-                    }
+                    await dvcUnregisterOurStandaloneSwAndCaches();
                   } catch {
                     /* best-effort; aj tak navigácia */
                   }

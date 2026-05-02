@@ -1,11 +1,11 @@
 import { defineConfig, type Plugin } from "vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { createRequire } from "node:module";
+import { computeDvcBuildId } from "./vite-build-id";
 const require = createRequire(import.meta.url);
 const pkg = require("./package.json") as { version: string };
 
@@ -13,15 +13,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const outDir = path.resolve(__dirname, "../standalone-dist");
 
-/** Deterministic per `package.json` — avoids mismatch when Vite evaluates config more than once. */
-function computeBuildId(pkgJsonPath: string): string {
-  return createHash("sha256").update(readFileSync(pkgJsonPath, "utf8")).digest("hex").slice(0, 10);
-}
-
 /**
  * Zápis `community-app.version.json` + `.dvc-build-meta.json` až v `closeBundle` (po PWA).
- * `buildId` je deterministický z `package.json` (žiadny `Date.now()` v hashi), aby sedel s `define`
- * aj keď Vite vyhodnotí konfig viackrát. Súbor **nie** v Workbox precache — fetch ide na sieť.
+ * `buildId`: pozri `vite-build-id.ts` (CI/env alebo hash `package.json` + `src/`).
+ * Súbor **nie** v Workbox precache — fetch ide na sieť.
  */
 function writeStandaloneBuildMetaPlugin(
   outputRoot: string,
@@ -48,7 +43,8 @@ function writeStandaloneBuildMetaPlugin(
 
 export default defineConfig(({ command }) => {
   const pkgPath = path.resolve(__dirname, "package.json");
-  const buildId = command === "build" ? computeBuildId(pkgPath) : "dev";
+  const srcRoot = path.resolve(__dirname, "src");
+  const buildId = command === "build" ? computeDvcBuildId(pkgPath, srcRoot) : "dev";
 
   return {
     base: "/",

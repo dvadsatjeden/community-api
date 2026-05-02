@@ -1,21 +1,16 @@
 import { defineConfig, type Plugin } from "vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { createRequire } from "node:module";
+import { computeDvcBuildId } from "./vite-build-id";
 const require = createRequire(import.meta.url);
 const pkg = require("./package.json") as { version: string };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginAssets = path.resolve(__dirname, "../wp-content/plugins/dvadsatjeden-community/assets");
-
-/** Deterministic z `package.json` — rovnaký dôvod ako `vite.config.standalone.ts`. */
-function computeBuildId(pkgJsonPath: string): string {
-  return createHash("sha256").update(readFileSync(pkgJsonPath, "utf8")).digest("hex").slice(0, 10);
-}
 
 function writeWpBuildMetaPlugin(outputRoot: string, version: string, buildId: string): Plugin {
   return {
@@ -35,7 +30,8 @@ function writeWpBuildMetaPlugin(outputRoot: string, version: string, buildId: st
 
 export default defineConfig(({ command }) => {
   const pkgPath = path.resolve(__dirname, "package.json");
-  const buildId = command === "build" ? computeBuildId(pkgPath) : "dev";
+  const srcRoot = path.resolve(__dirname, "src");
+  const buildId = command === "build" ? computeDvcBuildId(pkgPath, srcRoot) : "dev";
 
   return {
     // Oproti `community-app.js` v WP plugine — nie koreň domény. Inak workery/ chunky idú na `/assets/...` a dajú 404.
