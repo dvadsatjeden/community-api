@@ -22,6 +22,7 @@ final class ApiProxy
                 $settings = Settings::get();
                 $payload = [
                     'apiBaseUrl' => $settings['api_base_url'],
+                    'standaloneAppUrl' => $settings['standalone_app_url'],
                     'features' => [
                         'events' => (bool) $settings['enable_events'],
                         'map' => (bool) $settings['enable_map'],

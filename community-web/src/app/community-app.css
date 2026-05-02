@@ -1746,6 +1746,29 @@ a.dvcUvodSectionMore {
 }
 a.dvcUvodSectionMore:hover { color: var(--dvc-text); }
 
+/* Kde začať — stack + Úvod card (embedded WP) */
+.dvcKdeZacatStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dvcKdeZacatCard {
+  background: var(--dvc-surface);
+  border: 1px solid var(--dvc-glass-border);
+  border-radius: var(--dvc-radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dvcKdeZacatCardTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dvc-text);
+}
+.dvcKdeZacatCard .dvcMuted { margin: 0; }
+
 /* Kde začať card */
 .dvcKdeZacat {
   background: var(--dvc-surface);
