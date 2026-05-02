@@ -1,20 +1,35 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
 import { clientsClaim } from "workbox-core";
+import { NetworkFirst } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope;
 
-// Manifest verzie musí ísť vždy na sieť (signal nového deployu). Nie je v precache.
-// Rovnaký princíp ako jednadvacet `public/sw.js` — `/version.json` sa v SW vôbec nechytilo.
+// `community-app.version.json` musí ísť na sieť pred precache (signál deployu).
+// Samotné `return` bez `respondWith()` fetch nezachytí — Workbox by inak mohol obslúžiť starý manifest.
+// NetworkFirst + `cacheWillUpdate` → sieť prvé, runtime cache tento JSON neukladáme (stale buildId).
+const communityAppVersionJsonStrategy = new NetworkFirst({
+  fetchOptions: { cache: "no-store", credentials: "omit" },
+  networkTimeoutSeconds: 3,
+  plugins: [
+    {
+      cacheWillUpdate: async () => null,
+    },
+  ],
+});
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  let url: URL;
   try {
-    const url = new URL(event.request.url);
-    if (url.origin !== self.location.origin) return;
-    if (url.pathname.endsWith("/community-app.version.json")) return;
+    url = new URL(event.request.url);
   } catch {
-    /* ignore */
+    return;
   }
+  if (url.origin !== self.location.origin) return;
+  if (!url.pathname.endsWith("/community-app.version.json")) return;
+
+  event.respondWith(communityAppVersionJsonStrategy.handle({ event, request: event.request }));
 });
 
 precacheAndRoute(self.__WB_MANIFEST);

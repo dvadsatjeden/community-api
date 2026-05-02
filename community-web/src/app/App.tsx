@@ -91,7 +91,7 @@ const resolveCommunityAppVersionCheckUrl = (): string | null => {
   return null;
 };
 
-/** Obídenie CDN/proxy cache pri kontrole deployu (rovnaký nápad ako jednadvacet `?t=`). */
+/** Obídenie CDN/proxy cache pri kontrole deployu (časová pečiatka v query; podobne ako jednadvacet `?t=`). */
 const withVersionCheckCacheBust = (absoluteUrl: string): string => {
   try {
     const u = new URL(absoluteUrl);
@@ -1398,16 +1398,16 @@ const App = (): ReactElement => {
             <section className="dvcUvodSection">
               <h2 className="dvcUvodSectionTitle">Ako to funguje</h2>
               <div className="dvcFeatureGrid">
-                <div className="dvcFeatureCard">
+                <button type="button" className="dvcFeatureCard dvcFeatureCard--link" onClick={() => setView("calendar")}>
                   <span className="dvcFeatureIcon">📅</span>
                   <span className="dvcFeatureName">Kalendár eventov</span>
                   <span className="dvcFeatureDesc">Prehľad všetkých Bitcoin akcií na Slovensku — filtruj podľa kraja alebo kategórie.</span>
-                </div>
-                <div className="dvcFeatureCard">
+                </button>
+                <button type="button" className="dvcFeatureCard dvcFeatureCard--link" onClick={() => setView("map")}>
                   <span className="dvcFeatureIcon">🗺️</span>
                   <span className="dvcFeatureName">Mapa komunít</span>
                   <span className="dvcFeatureDesc">Zobrazuje lokálne Signal skupiny a eventy na interaktívnej mape Slovenska.</span>
-                </div>
+                </button>
                 <div className="dvcFeatureCard">
                   <span className="dvcFeatureIcon">🔐</span>
                   <span className="dvcFeatureName">Anonymný účet</span>
@@ -1423,11 +1423,11 @@ const App = (): ReactElement => {
                   <span className="dvcFeatureName">Push notifikácie</span>
                   <span className="dvcFeatureDesc">Dostávaj upozornenia na nové eventy priamo do prehliadača cez Web Push.</span>
                 </div>
-                <div className="dvcFeatureCard">
+                <button type="button" className="dvcFeatureCard dvcFeatureCard--link" onClick={() => setView("info")}>
                   <span className="dvcFeatureIcon">📲</span>
                   <span className="dvcFeatureName">Inštalovateľná PWA</span>
                   <span className="dvcFeatureDesc">Nainštaluj ako natívnu appku na mobil alebo počítač — funguje aj offline.</span>
-                </div>
+                </button>
               </div>
             </section>
 
@@ -2027,7 +2027,7 @@ const App = (): ReactElement => {
                       await Promise.all(keys.map((k) => caches.delete(k)));
                     }
                   } catch {
-                    /* ako jednadvacet: aj tak reload */
+                    /* best-effort; aj tak reload */
                   }
                   window.location.reload();
                 })();

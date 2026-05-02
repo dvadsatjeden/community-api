@@ -24,7 +24,7 @@ function computeBuildId(pkgJsonPath: string): string {
 /**
  * Zápis `community-app.version.json` + `.dvc-build-meta.json` až v `closeBundle` (po PWA),
  * aby `buildId` sedel s `define` z rovnakého behu buildu. Súbor **nie** v Workbox precache
- * (ako `version.json` u jednadvacet) — fetch ide vždy na sieť a signalizuje nový deploy.
+ * (ako `version.json` u jednadvacet) — fetch ide vždy na sieť ako signál nového deployu.
  */
 function writeStandaloneBuildMetaPlugin(
   outputRoot: string,

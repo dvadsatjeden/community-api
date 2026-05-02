@@ -1797,6 +1797,20 @@ a.dvcUvodSectionMore:hover { color: var(--dvc-text); }
   flex-direction: column;
   gap: 4px;
 }
+.dvcFeatureCard--link {
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dvcFeatureCard--link:hover,
+.dvcFeatureCard--link:focus-visible {
+  border-color: var(--dvc-btc);
+  background: color-mix(in srgb, var(--dvc-btc) 8%, var(--dvc-surface));
+  outline: none;
+}
+.dvcFeatureCard--link:active {
+  background: color-mix(in srgb, var(--dvc-btc) 14%, var(--dvc-surface));
+}
 .dvcFeatureIcon {
   font-size: 1.35rem;
   line-height: 1;
