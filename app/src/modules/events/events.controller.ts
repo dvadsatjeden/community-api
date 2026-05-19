@@ -145,13 +145,20 @@ export const normalizeEvent = (event: Record<string, unknown>, index: number): E
       event.town,
       typeof ext?.region === "string" ? ext.region : undefined
     ),
-    country: pickString(
-      event.country,
-      event.countryCode,
-      event.country_code,
-      typeof ext?.country === "string" ? ext.country : undefined,
-      typeof ext?.country_code === "string" ? ext.country_code : undefined
-    ),
+    country: (() => {
+      const explicit = pickString(
+        event.country,
+        event.countryCode,
+        event.country_code,
+        typeof ext?.country === "string" ? ext.country : undefined,
+        typeof ext?.country_code === "string" ? ext.country_code : undefined
+      );
+      if (explicit) return explicit;
+      // Fallback: if region is a bare country code (e.g. "CZ", "SK"), treat it as country.
+      const region = pickString(event.region, event.state, typeof ext?.region === "string" ? ext.region : undefined);
+      if (region && /^[a-z]{2}$/i.test(region.trim())) return region.trim().toLowerCase();
+      return undefined;
+    })(),
     region: pickString(
       event.region,
       event.state,
