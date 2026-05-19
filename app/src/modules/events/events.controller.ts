@@ -219,47 +219,49 @@ export const selectEvents = (
   return out;
 };
 
-export const importEventsFromSource = async (sourceUrl = SOURCE_URL_DEFAULT): Promise<number> => {
-  const targetUrl = sourceUrl ?? SOURCE_URL_DEFAULT;
-  importAttempted = true;
-  const response = await fetch(targetUrl, { headers: { accept: "application/json" } });
+const fetchRawItems = async (url: string): Promise<unknown[]> => {
+  const response = await fetch(url.trim(), { headers: { accept: "application/json" } });
   if (!response.ok) {
-    throw new Error(`Source request failed with ${response.status}`);
+    throw new Error(`Source request failed with ${response.status} for ${url}`);
   }
   const payload = (await response.json()) as unknown;
-
-  let rawItems: unknown[] = [];
-  if (Array.isArray(payload)) {
-    rawItems = payload;
-  } else if (
-    payload &&
-    typeof payload === "object" &&
-    "items" in payload &&
-    Array.isArray((payload as { items: unknown[] }).items)
-  ) {
-    rawItems = (payload as { items: unknown[] }).items;
-  } else if (
-    payload &&
-    typeof payload === "object" &&
-    "data" in payload &&
-    Array.isArray((payload as { data: unknown[] }).data)
-  ) {
-    rawItems = (payload as { data: unknown[] }).data;
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === "object" && "items" in payload && Array.isArray((payload as { items: unknown[] }).items)) {
+    return (payload as { items: unknown[] }).items;
   }
+  if (payload && typeof payload === "object" && "data" in payload && Array.isArray((payload as { data: unknown[] }).data)) {
+    return (payload as { data: unknown[] }).data;
+  }
+  return [];
+};
 
+export const importEventsFromSource = async (sourceUrl = SOURCE_URL_DEFAULT): Promise<number> => {
+  const urls = (sourceUrl ?? SOURCE_URL_DEFAULT).split(",").map((u) => u.trim()).filter((u) => u.length > 0);
+  importAttempted = true;
+
+  const rawItemsPerUrl = await Promise.all(urls.map((url) => fetchRawItems(url)));
+  const rawItems = rawItemsPerUrl.flat();
+
+  let globalIndex = 0;
   const normalized = rawItems
-    .map((item, index) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-      return normalizeEvent(item as Record<string, unknown>, index);
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      return normalizeEvent(item as Record<string, unknown>, globalIndex++);
     })
     .filter((item): item is EventItem => item !== null);
 
+  // Deduplicate by id — keep first occurrence (SK before CZ if SK URL is listed first).
+  const seen = new Set<string>();
+  const deduped = normalized.filter((e) => {
+    if (seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
+
   // Always set cache to an array after a successful import attempt, even if empty.
-  cachedEvents = normalized;
-  const addresses = normalized.map((e) => e.locationName).filter((a): a is string => !!a);
+  cachedEvents = deduped;
+  const addresses = deduped.map((e) => e.locationName).filter((a): a is string => !!a);
   scheduleGeocoding(addresses);
-  void notifyNewEvents(normalized);
-  return normalized.length;
+  void notifyNewEvents(deduped);
+  return deduped.length;
 };
