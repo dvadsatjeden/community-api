@@ -27,6 +27,7 @@ final class ApiProxy
                         'events' => (bool) $settings['enable_events'],
                         'map' => (bool) $settings['enable_map'],
                         'push' => (bool) $settings['enable_push'],
+                        'ideas' => (bool) $settings['enable_ideas'],
                     ],
                     'sources' => [
                         'events' => $settings['events_source_url'],

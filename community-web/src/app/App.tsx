@@ -5,6 +5,7 @@ import type { RsvpStatus } from "./evolu/rsvpStatus";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { type DerivedAccount, deriveFromMnemonic, generateMnemonic, validateBip39Mnemonic } from "../features/account/seedRecovery";
 import { NostrSignInModal } from "../features/nostr/NostrSignInModal";
+import { IdeasView } from "../features/ideas/IdeasView";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./community-app.css";
@@ -35,7 +36,7 @@ type EventItem = {
 };
 
 type RsvpCounts = Record<RsvpStatus, number>;
-type ViewName = "home" | "calendar" | "map" | "info" | "uvod";
+type ViewName = "home" | "calendar" | "map" | "info" | "uvod" | "ideas";
 const EVENT_CATEGORIES = ["MeetUpy", "Bitcoin Pivo", "Konferencie", "Ostatné"] as const;
 
 type Community = { id: number; name: string; lat: number; lng: number; marker_image?: string };
@@ -439,6 +440,7 @@ const App = (): ReactElement => {
   const [isReloading, setIsReloading] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [nostrLogin, setNostrLogin] = useState(false);
+  const [ideasFeature, setIdeasFeature] = useState(true);
   const [isNostrSignInOpen, setIsNostrSignInOpen] = useState(false);
   const [mnemonicError, setMnemonicError] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
@@ -702,7 +704,7 @@ const App = (): ReactElement => {
           apiBaseUrl?: string;
           standaloneAppUrl?: string;
           vapidPublicKey?: string;
-          features?: { events?: boolean; map?: boolean; push?: boolean; nostrLogin?: boolean };
+          features?: { events?: boolean; map?: boolean; push?: boolean; nostrLogin?: boolean; ideas?: boolean };
         }>;
       })
       .then((cfg) => {
@@ -720,6 +722,7 @@ const App = (): ReactElement => {
         if (typeof cfg.features?.map === "boolean") setMapFeature(cfg.features.map);
         if (cfg.features?.push === true) setPushFeature(true);
         setNostrLogin(cfg.features?.nostrLogin === true);
+        if (typeof cfg.features?.ideas === "boolean") setIdeasFeature(cfg.features.ideas);
       })
       .catch(() => {
         setApiBaseUrl(fallbackFromMount());
@@ -1613,6 +1616,11 @@ const App = (): ReactElement => {
           <div ref={mapContainerRef} className="dvcMapContainer" />
         </div>
 
+        {/* ── Nápady view ── */}
+        {view === "ideas" && ideasFeature ? (
+          <IdeasView apiBase={apiBaseUrl} account={account} />
+        ) : null}
+
         {/* ── Info / Nastavenia view ── */}
         {view === "info" ? (
           <div className="dvcInfoView">
@@ -2112,6 +2120,15 @@ const App = (): ReactElement => {
             <path d="M9 20l-5-2V4l5 2m0 14l6-2m-6 2V6m6 12l5 2V6l-5-2m0 14V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <span>Mapa</span>
+        </button>
+        ) : null}
+        {ideasFeature ? (
+        <button className={view === "ideas" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("ideas")}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M9 21h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+          <span>Nápady</span>
         </button>
         ) : null}
         <button className={view === "info" ? "dvcNavItem dvcNavItem--active" : "dvcNavItem"} type="button" onClick={() => setView("info")}>

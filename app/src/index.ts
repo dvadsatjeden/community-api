@@ -10,6 +10,11 @@ import { getMyRsvp, getRsvpCounts, removeRsvp, submitRsvp } from "./modules/rsvp
 import { getArticles } from "./modules/articles/articles";
 import { getCommunities, getCommunityUrl } from "./modules/communities/communities";
 import { isNostrAuthConfigured, nostrAuthChallengeGet, nostrAuthVerifyPost } from "./modules/nostr-auth/nostr-auth.controller";
+import {
+  createComment, createIdea, deleteCommentById, deleteIdeaById,
+  getIdeaById, getMyIdeaUpvotes, listCategories, listCommentsForIdea,
+  listIdeas, removeIdeaUpvote, updateCommentById, updateIdeaById, upvoteIdea,
+} from "./modules/ideas/ideas.controller";
 
 const app = express();
 
@@ -88,6 +93,7 @@ app.get("/v1/config", (_req, res) => {
       map: true,
       push: !!getVapidPublicKey(),
       nostrLogin: isNostrAuthConfigured(),
+      ideas: process.env.IDEAS_ENABLED !== "false",
     },
     vapidPublicKey: getVapidPublicKey(),
     sources: {
@@ -246,6 +252,109 @@ app.post("/v1/import/run", requireImportSecret, async (_req, res) => {
       detail,
     });
   }
+});
+
+// ── Ideas routes ────────────────────────────────────────────────────────────
+const ideasWriteRateLimit = makeRateLimit(20, 60_000);
+
+const requireAnonToken = (req: Request, res: Response, next: NextFunction): void => {
+  const token = typeof req.headers["x-anonymous-token"] === "string" ? req.headers["x-anonymous-token"].trim() : "";
+  if (!token) { res.status(401).json({ error: "X-Anonymous-Token header required" }); return; }
+  (req as Request & { anonToken: string }).anonToken = token;
+  next();
+};
+
+app.get("/v1/ideas/categories", (_req, res) => {
+  res.json({ items: listCategories() });
+});
+
+app.get("/v1/ideas/upvotes/mine", (req, res) => {
+  const token =
+    (typeof req.headers["x-anonymous-token"] === "string" ? req.headers["x-anonymous-token"] : "") ||
+    (typeof req.query.voterToken === "string" ? req.query.voterToken : "");
+  if (!token) return res.status(400).json({ error: "voterToken is required" });
+  return res.json({ items: getMyIdeaUpvotes(token) });
+});
+
+app.get("/v1/ideas", (req, res) => {
+  const category = typeof req.query.category === "string" && req.query.category.trim() ? req.query.category.trim() : undefined;
+  const q = typeof req.query.q === "string" && req.query.q.trim() ? req.query.q.trim() : undefined;
+  const sortRaw = typeof req.query.sort === "string" ? req.query.sort.trim() : "newest";
+  const sort = sortRaw === "upvotes" ? "upvotes" : "newest";
+  res.json({ items: listIdeas({ category, q, sort }) });
+});
+
+app.get("/v1/ideas/:id", (req, res) => {
+  const voterToken = typeof req.headers["x-anonymous-token"] === "string" ? req.headers["x-anonymous-token"] : undefined;
+  const idea = getIdeaById(req.params.id, voterToken);
+  if (!idea) return res.status(404).json({ error: "not found" });
+  return res.json(idea);
+});
+
+app.post("/v1/ideas", ideasWriteRateLimit, requireAnonToken, (req, res) => {
+  const ownerToken = (req as Request & { anonToken: string }).anonToken;
+  const { title, description, categoryId, categoryOther, authorPseudonym } = req.body ?? {};
+  const result = createIdea({ title, description, categoryId, categoryOther, authorPseudonym, ownerToken });
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  return res.status(201).json(result.idea);
+});
+
+app.patch("/v1/ideas/:id", ideasWriteRateLimit, requireAnonToken, (req, res) => {
+  const ownerToken = (req as Request & { anonToken: string }).anonToken;
+  const { title, description, categoryId, categoryOther, authorPseudonym } = req.body ?? {};
+  const result = updateIdeaById(req.params.id, { title, description, categoryId, categoryOther, authorPseudonym, ownerToken });
+  if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+  return res.json(result.idea);
+});
+
+app.delete("/v1/ideas/:id", requireAnonToken, (req, res) => {
+  const ownerToken = (req as Request & { anonToken: string }).anonToken;
+  const result = deleteIdeaById(req.params.id, ownerToken);
+  if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+  return res.status(204).end();
+});
+
+app.get("/v1/ideas/:id/comments", (req, res) => {
+  res.json({ items: listCommentsForIdea(req.params.id) });
+});
+
+app.post("/v1/ideas/:id/comments", ideasWriteRateLimit, requireAnonToken, (req, res) => {
+  const ownerToken = (req as Request & { anonToken: string }).anonToken;
+  const { kind, body, authorPseudonym } = req.body ?? {};
+  const result = createComment({ ideaId: req.params.id, kind, body, authorPseudonym, ownerToken });
+  if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+  return res.status(201).json(result.comment);
+});
+
+app.patch("/v1/ideas/:id/comments/:cid", ideasWriteRateLimit, requireAnonToken, (req, res) => {
+  const ownerToken = (req as Request & { anonToken: string }).anonToken;
+  const { body, authorPseudonym } = req.body ?? {};
+  const result = updateCommentById(req.params.cid, { body, authorPseudonym, ownerToken });
+  if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+  return res.json(result.comment);
+});
+
+app.delete("/v1/ideas/:id/comments/:cid", requireAnonToken, (req, res) => {
+  const ownerToken = (req as Request & { anonToken: string }).anonToken;
+  const result = deleteCommentById(req.params.cid, ownerToken);
+  if (!result.ok) return res.status(result.status ?? 400).json({ error: result.error });
+  return res.status(204).end();
+});
+
+app.post("/v1/ideas/:id/upvote", ideasWriteRateLimit, (req, res) => {
+  const voterToken =
+    (typeof req.headers["x-anonymous-token"] === "string" ? req.headers["x-anonymous-token"] : "") ||
+    (typeof req.body?.voterToken === "string" ? req.body.voterToken : "");
+  if (!voterToken) return res.status(400).json({ error: "voterToken is required" });
+  return res.json(upvoteIdea(req.params.id, voterToken));
+});
+
+app.delete("/v1/ideas/:id/upvote", (req, res) => {
+  const voterToken =
+    (typeof req.headers["x-anonymous-token"] === "string" ? req.headers["x-anonymous-token"] : "") ||
+    (typeof req.body?.voterToken === "string" ? req.body.voterToken : "");
+  if (!voterToken) return res.status(400).json({ error: "voterToken is required" });
+  return res.json(removeIdeaUpvote(req.params.id, voterToken));
 });
 
 const port = Number(process.env.PORT ?? 3021);

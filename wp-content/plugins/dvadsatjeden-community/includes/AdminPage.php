@@ -74,9 +74,11 @@ final class AdminPage
                             <input type="hidden" name="dvadsatjeden_community_settings[enable_events]" value="0" />
                             <input type="hidden" name="dvadsatjeden_community_settings[enable_map]" value="0" />
                             <input type="hidden" name="dvadsatjeden_community_settings[enable_push]" value="0" />
+                            <input type="hidden" name="dvadsatjeden_community_settings[enable_ideas]" value="0" />
                             <label><input name="dvadsatjeden_community_settings[enable_events]" type="checkbox" value="1" <?php checked($settings['enable_events']); ?>> Events</label><br>
                             <label><input name="dvadsatjeden_community_settings[enable_map]" type="checkbox" value="1" <?php checked($settings['enable_map']); ?>> Mapa</label><br>
-                            <label><input name="dvadsatjeden_community_settings[enable_push]" type="checkbox" value="1" <?php checked($settings['enable_push']); ?>> Push</label>
+                            <label><input name="dvadsatjeden_community_settings[enable_push]" type="checkbox" value="1" <?php checked($settings['enable_push']); ?>> Push</label><br>
+                            <label><input name="dvadsatjeden_community_settings[enable_ideas]" type="checkbox" value="1" <?php checked($settings['enable_ideas']); ?>> Nápady &amp; projekty</label>
                         </td>
                     </tr>
                     <tr>

@@ -36,6 +36,7 @@ final class Settings
             'enable_events' => true,
             'enable_map' => true,
             'enable_push' => false,
+            'enable_ideas' => true,
             'force_enqueue_assets' => false,
         ];
     }
@@ -59,6 +60,7 @@ final class Settings
             'enable_events' => (bool) $values['enable_events'],
             'enable_map' => (bool) $values['enable_map'],
             'enable_push' => (bool) $values['enable_push'],
+            'enable_ideas' => (bool) $values['enable_ideas'],
             'force_enqueue_assets' => (bool) $values['force_enqueue_assets'],
         ];
     }

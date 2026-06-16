@@ -43,3 +43,33 @@ export type RsvpPayload = {
 };
 
 export type RsvpCounts = Record<RsvpStatus, number>;
+
+export type IdeaCategoryId = "infra" | "events" | "education" | "tools" | "community" | "other";
+
+export type IdeaItem = {
+  id: string;
+  title: string;
+  description: string;
+  categoryId: IdeaCategoryId;
+  categoryOther?: string;
+  authorOwnerId: string;
+  authorTokenHash: string;
+  authorPseudonym?: string;
+  status: "published";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IdeaCommentKind = "comment" | "suggestion" | "remark";
+
+export type IdeaComment = {
+  id: string;
+  ideaId: string;
+  kind: IdeaCommentKind;
+  body: string;
+  authorOwnerId: string;
+  authorTokenHash: string;
+  authorPseudonym?: string;
+  createdAt: string;
+  updatedAt: string;
+};
