@@ -1,24 +1,22 @@
 import React, { useState, type ReactElement } from "react";
-import type { IdeaCategory, IdeaCategoryId } from "./ideasApi";
+import type { IdeaCategory, IdeaCategoryId, IdeaFormPayload } from "./ideasApi";
 
 type Props = {
   categories: IdeaCategory[];
-  onSubmit: (payload: {
-    title: string;
-    description: string;
-    categoryId: IdeaCategoryId;
-    categoryOther?: string;
-    authorPseudonym?: string;
-  }) => Promise<void>;
+  initialValues?: Partial<IdeaFormPayload>;
+  submitLabel?: string;
+  onSubmit: (payload: IdeaFormPayload) => Promise<void>;
   onCancel: () => void;
 };
 
-export const CreateIdeaForm = ({ categories, onSubmit, onCancel }: Props): ReactElement => {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [categoryId, setCategoryId] = useState<IdeaCategoryId>("community");
-  const [categoryOther, setCategoryOther] = useState("");
-  const [pseudonym, setPseudonym] = useState("");
+export const CreateIdeaForm = ({ categories, initialValues, submitLabel = "Pridať nápad", onSubmit, onCancel }: Props): ReactElement => {
+  const [title, setTitle] = useState(initialValues?.title ?? "");
+  const [description, setDescription] = useState(initialValues?.description ?? "");
+  const [categoryId, setCategoryId] = useState<IdeaCategoryId>(initialValues?.categoryId ?? "community");
+  const [categoryOther, setCategoryOther] = useState(initialValues?.categoryOther ?? "");
+  const [websiteUrl, setWebsiteUrl] = useState(initialValues?.websiteUrl ?? "");
+  const [signalUrl, setSignalUrl] = useState(initialValues?.signalUrl ?? "");
+  const [pseudonym, setPseudonym] = useState(initialValues?.authorPseudonym ?? "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -32,6 +30,8 @@ export const CreateIdeaForm = ({ categories, onSubmit, onCancel }: Props): React
         description: description.trim(),
         categoryId,
         categoryOther: categoryId === "other" ? categoryOther.trim() : undefined,
+        websiteUrl: websiteUrl.trim() || undefined,
+        signalUrl: signalUrl.trim() || undefined,
         authorPseudonym: pseudonym.trim() || undefined,
       });
     } catch (err) {
@@ -97,6 +97,28 @@ export const CreateIdeaForm = ({ categories, onSubmit, onCancel }: Props): React
           />
         </div>
         <div>
+          <label className="dvcLabel" htmlFor="idea-website">Web (voliteľné)</label>
+          <input
+            id="idea-website"
+            className="dvcInput"
+            type="url"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+            placeholder="https://..."
+          />
+        </div>
+        <div>
+          <label className="dvcLabel" htmlFor="idea-signal">Signal skupina (voliteľné)</label>
+          <input
+            id="idea-signal"
+            className="dvcInput"
+            type="url"
+            value={signalUrl}
+            onChange={(e) => setSignalUrl(e.target.value)}
+            placeholder="https://signal.group/..."
+          />
+        </div>
+        <div>
           <label className="dvcLabel" htmlFor="idea-pseudo">Prezývka (voliteľné)</label>
           <input
             id="idea-pseudo"
@@ -112,7 +134,7 @@ export const CreateIdeaForm = ({ categories, onSubmit, onCancel }: Props): React
       {error ? <p className="dvcFieldError">{error}</p> : null}
       <div className="dvcRow" style={{ marginTop: "16px", gap: "10px" }}>
         <button type="submit" className="dvcBtn dvcBtnPrimary" disabled={submitting}>
-          {submitting ? "Pridávam…" : "Pridať nápad"}
+          {submitting ? "Ukladám…" : submitLabel}
         </button>
         <button type="button" className="dvcBtn dvcBtnGhost" onClick={onCancel}>
           Zrušiť

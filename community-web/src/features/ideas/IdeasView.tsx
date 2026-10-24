@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import type { DerivedAccount } from "../account/seedRecovery";
 import type { IdeaCategory, IdeaCategoryId, IdeaItem } from "./ideasApi";
-import { createIdea, fetchCategories, fetchIdeas } from "./ideasApi";
+import { createIdea, fetchCategories, fetchIdeas, type IdeaFormPayload } from "./ideasApi";
 import { IdeaDetailPanel } from "./IdeaDetailPanel";
 import { CreateIdeaForm } from "./CreateIdeaForm";
 import { getOrCreateUpvoteToken } from "./upvoteToken";
@@ -20,6 +20,7 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterSort, setFilterSort] = useState<"newest" | "upvotes">("newest");
   const [searchQ, setSearchQ] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [detailIdea, setDetailIdea] = useState<IdeaItem | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -37,13 +38,15 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
         category: filterCategory !== "all" ? filterCategory : undefined,
         q: searchQ.trim() || undefined,
         sort: filterSort,
+        showArchived,
+        ownerToken: account?.rsvpToken,
       };
       const items = await fetchIdeas(apiBase, params);
       setIdeas(items);
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [apiBase, filterCategory, filterSort, searchQ]);
+  }, [apiBase, filterCategory, filterSort, searchQ, showArchived, account]);
 
   useEffect(() => {
     if (!apiBase) return;
@@ -54,13 +57,7 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
     void loadIdeas();
   }, [loadIdeas]);
 
-  const handleCreate = async (payload: {
-    title: string;
-    description: string;
-    categoryId: IdeaCategoryId;
-    categoryOther?: string;
-    authorPseudonym?: string;
-  }): Promise<void> => {
+  const handleCreate = async (payload: IdeaFormPayload): Promise<void> => {
     if (!account || !apiBase) throw new Error("Potrebuješ účet");
     await createIdea(apiBase, account.rsvpToken, payload);
     setShowCreateForm(false);
@@ -104,6 +101,7 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
         <input
           className="dvcInput dvcIdeasSearch"
           type="search"
+          aria-label="Hľadať nápady"
           value={searchQ}
           onChange={(e) => setSearchQ(e.target.value)}
           placeholder="Hľadať…"
@@ -142,6 +140,13 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
           >
             Najviac hlasov
           </button>
+          <button
+            type="button"
+            className={showArchived ? "dvcFilterChip dvcFilterChip--active dvcFilterChip--archive" : "dvcFilterChip dvcFilterChip--archive"}
+            onClick={() => setShowArchived((v) => !v)}
+          >
+            Archív
+          </button>
         </div>
       </div>
 
@@ -149,7 +154,7 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
       {loading ? (
         <div className="dvcEmpty">Načítavam…</div>
       ) : ideas.length === 0 ? (
-        <div className="dvcEmpty">Žiadne nápady. Buď prvý!</div>
+        <div className="dvcEmpty">{showArchived ? "Archív je prázdny." : "Žiadne nápady. Buď prvý!"}</div>
       ) : (
         <div className="dvcIdeaList">
           {ideas.map((idea) => (
@@ -168,6 +173,7 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
               <div className="dvcIdeaCardFooter">
                 <span className="dvcUpvotePill">▲ {idea.upvoteCount}</span>
                 <span className="dvcIdeaCommentCount">💬 {idea.commentCount}</span>
+                {idea.isOwner ? <span className="dvcIdeaOwnerTag">moje</span> : null}
                 {idea.authorPseudonym ? <span className="dvcIdeaAuthor">@{idea.authorPseudonym}</span> : null}
               </div>
             </button>
@@ -181,8 +187,10 @@ export const IdeasView = ({ apiBase, account }: Props): ReactElement => {
           apiBase={apiBase}
           ownerToken={account?.rsvpToken ?? null}
           voterToken={voterToken}
+          categories={categories}
           onClose={() => setDetailIdea(null)}
           onDeleted={() => { setDetailIdea(null); void loadIdeas(); }}
+          onUpdated={() => void loadIdeas()}
         />
       ) : null}
     </div>

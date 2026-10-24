@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { getDatabase, readSnapshot, writeSnapshot } from "../../storage/database.js";
 
 type Coords = [number, number]; // [lat, lng]
 type Persisted = Record<string, Coords>;
@@ -8,31 +7,16 @@ let cache: Map<string, Coords> | null = null;
 let queueProcessing = false;
 const pendingQueue: string[] = [];
 
-const cachePath = (): string =>
-  process.env.GEOCODE_CACHE_PATH
-    ? resolve(process.env.GEOCODE_CACHE_PATH)
-    : resolve(process.cwd(), "data", "geocode-cache.json");
-
 export const normalizeAddress = (addr: string): string => addr.trim().toLowerCase();
 
 const load = (): void => {
   if (cache !== null) return;
-  const p = cachePath();
-  if (!existsSync(p)) { cache = new Map(); return; }
-  try {
-    const raw = JSON.parse(readFileSync(p, "utf8")) as Persisted;
-    cache = new Map(Object.entries(raw));
-  } catch {
-    cache = new Map();
-  }
+  cache = new Map(Object.entries(readSnapshot<Persisted>("geocoding") ?? {}));
 };
 
 const persist = (): void => {
   if (!cache) return;
-  const p = cachePath();
-  mkdirSync(dirname(p), { recursive: true });
-  const obj: Persisted = Object.fromEntries(cache);
-  writeFileSync(p, JSON.stringify(obj, null, 0) + "\n", "utf8");
+  writeSnapshot("geocoding", Object.fromEntries(cache));
 };
 
 export const getCachedCoords = (address: string): Coords | undefined => {
@@ -43,6 +27,7 @@ export const getCachedCoords = (address: string): Coords | undefined => {
 const fetchNominatim = async (address: string): Promise<Coords | null> => {
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
   const r = await fetch(url, {
+    signal: AbortSignal.timeout(10_000),
     headers: {
       "Accept-Language": "sk,cs,en",
       "User-Agent": "dvadsatjeden-community-api/1.0 (https://dvadsatjeden.org)",
@@ -87,8 +72,6 @@ export const _resetForTesting = (): void => {
   cache = null;
   pendingQueue.length = 0;
   queueProcessing = false;
-  const p = cachePath();
-  if (existsSync(p)) {
-    try { unlinkSync(p); } catch { /* ignore */ }
-  }
+  if (process.env.NODE_ENV !== "test") throw new Error("Test reset outside test environment");
+  getDatabase().prepare("DELETE FROM snapshots WHERE name = 'geocoding'").run();
 };

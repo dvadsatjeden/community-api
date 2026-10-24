@@ -1,27 +1,32 @@
-# 12-word BIP-39 seed account flow
+# Účty, záloha a dôvera
 
-## Onboarding
-1. User opens app first time.
-2. App generates 12-word mnemonic using **BIP-39** (English 2048-word list, 128-bit entropy + checksum).
-3. UI forces backup confirmation:
-   - user must re-enter 3 random words (e.g. #2, #7, #11)
-   - without confirmation, account is not marked as recoverable.
-4. App derives:
-   - `ownerId` (public anonymous identity)
-   - `rsvpToken` (stable anonymous token for event voting)
-   - `dataKey` (local encryption key)
-5. App stores encrypted local state + metadata in browser storage.
+## Lokálny účet
 
-## Restore on another device
-1. User chooses "Restore account".
-2. User enters 12 words.
-3. App validates BIP-39 checksum + word list membership.
-4. App derives the same `ownerId`, `rsvpToken`, and `dataKey`.
-5. App downloads/syncs remote encrypted records and merges with local cache.
-6. App asks for conflict resolution only if same record changed on both devices.
+Prezeranie aplikácie nevyžaduje účet. Na požiadanie sa v prehliadači vytvorí 12 anglických BIP-39 slov (128 bitov entropie + checksum). Z normalizovaných slov sa odvodí:
 
-## Security guardrails
-- Seed never leaves device.
-- Server receives only anonymous token values, never mnemonic.
-- UI warns that lost seed means no account recovery.
-- Clipboard copy for seed should be optional and auto-cleared hint is shown.
+- `ownerId = SHA256("owner:" + mnemonic)[0:32]`
+- `rsvpToken = SHA256("rsvp:" + mnemonic)`
+
+Slová lokálneho účtu sa na API neposielajú. Token je nositeľské oprávnenie: kto ho pozná, môže meniť príslušné RSVP a obsah. Na serveri sa ukladá jeho SHA-256 hash, nie token. Nejde o ochranu pred vytváraním viacerých identít jedným človekom.
+
+Do potvrdenia zálohy aplikácia ukladá slová lokálne. Používateľ potvrdí uloženie mimo zariadenia a doplní tri náhodne vybrané slová. Po úspešnom potvrdení sa slová odstránia z uloženého účtu aj pamäte stavu účtu; token zostáva, aby sa nemusel prihlasovať pri každej návšteve. Aplikácia nemôže zaručiť vymazanie všetkých kópií z pamäte prehliadača, schránky či operačného systému.
+
+Účet má verziované úložisko `d21.account.v2` a záložnú kópiu v IndexedDB. Záloha v IndexedDB nie je samostatnou zárukou proti vymazaniu údajov prehliadača. Lokálne tokeny ani čakajúce slová nie sú šifrované samostatným používateľským heslom.
+
+## Obnova
+
+Zadané slová sa validujú proti BIP-39 checksumu. Odvodia sa tie isté údaje, slová sa po obnove neukladajú a API vráti RSVP. Vlastníctvo nápadov a komentárov používa rovnaký token. Stratené slová lokálneho účtu nemá kto obnoviť.
+
+## Nostr — odlišný model dôvery
+
+Podpis sa vytvára cez NIP-07 rozšírenie alebo NIP-46 podpisovač; aplikácia nežiada vloženie `nsec`. Server vydá jednorazovú výzvu, overí podpis a čas a spotrebuje výzvu s päťminútovým TTL.
+
+Z kombinácie stabilného `NOSTR_AUTH_SECRET` a overeného verejného kľúča server deterministicky odvodí BIP-39 slová účtu. Z nich odvodí **rovnakým postupom ako prehliadač** aj `ownerId` a `rsvpToken`. Účet tak obnoví opätovné Nostr prihlásenie aj jeho 12 slov.
+
+Server tieto slová pozná a vie ich znovu odvodiť. Nostr prihlásenie preto neposkytuje rovnaký model súkromia ako lokálne vytvorený účet. Zmena serverového tajomstva zmení účty vydané cez Nostr; pôvodné uložené slová naďalej obnovia pôvodný účet. Tajomstvo musí byť bezpečne zálohované.
+
+Výzvy a poverenia majú `Cache-Control: no-store`. Redis je voliteľný pre zdieľanie výziev, nie všeobecné škálovanie aplikácie.
+
+## Ukladanie a offline režim
+
+RSVP, nápady, komentáre a hlasy sú na serveri v SQLite. Nejde o end-to-end šifrované údaje. Evolu a jeho duplicitná synchronizácia boli odstránené. UI ukáže nový RSVP až po úspešnej odpovedi API; výpadok oznámi a umožní opakovanie. Server spracuje opakované nastavenie rovnakého hlasu bez jeho prepnutia späť.

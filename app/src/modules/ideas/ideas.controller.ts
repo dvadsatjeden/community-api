@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
-import type { IdeaCategoryId, IdeaCommentKind } from "../contracts";
+import type { IdeaCategoryId, IdeaCommentKind } from "../contracts.js";
 import {
   addComment, addIdea, deleteComment, deleteIdea,
   getComments, getIdeas, getMyUpvotes, getUpvoteCount, hasUpvoted,
   hashToken, removeUpvote, toggleUpvote, updateComment, updateIdea,
-} from "./ideas-persistence";
-import { CATEGORIES } from "./categories";
+} from "./ideas-persistence.js";
+import { CATEGORIES } from "./categories.js";
 
 const TITLE_MIN = 5, TITLE_MAX = 120;
 const DESC_MIN = 20, DESC_MAX = 5000;
@@ -14,11 +14,11 @@ const COMMENT_MIN = 1, COMMENT_MAX = 2000;
 const VALID_CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id));
 const VALID_COMMENT_KINDS = new Set<IdeaCommentKind>(["comment", "suggestion", "remark"]);
 
-type IdeaItem = import("../contracts").IdeaItem;
-type IdeaComment = import("../contracts").IdeaComment;
+type IdeaItem = import("../contracts.js").IdeaItem;
+type IdeaComment = import("../contracts.js").IdeaComment;
 
 export type IdeaWithCounts = IdeaItem & { upvoteCount: number; commentCount: number };
-export type IdeaDetail = IdeaWithCounts & { myUpvote?: boolean };
+export type IdeaDetail = IdeaWithCounts & { myUpvote?: boolean; isOwner?: boolean };
 
 function genId(): string { return crypto.randomUUID(); }
 function now(): string { return new Date().toISOString(); }
@@ -30,8 +30,11 @@ export const listIdeas = (params: {
   category?: string;
   q?: string;
   sort?: "newest" | "upvotes";
-}): IdeaWithCounts[] => {
-  let items = getIdeas().filter((i) => i.status === "published");
+  showArchived?: boolean;
+  ownerToken?: string;
+}): (IdeaWithCounts & { isOwner?: boolean })[] => {
+  const targetStatus = params.showArchived ? "archived" : "published";
+  let items = getIdeas().filter((i) => i.status === targetStatus);
   if (params.category) items = items.filter((i) => i.categoryId === params.category);
   if (params.q) {
     const q = params.q.toLowerCase().trim();
@@ -40,10 +43,12 @@ export const listIdeas = (params: {
     );
   }
   const all = getComments();
-  const withCounts: IdeaWithCounts[] = items.map((i) => ({
+  const ownerHash = params.ownerToken ? hashToken(params.ownerToken) : undefined;
+  const withCounts = items.map((i) => ({
     ...i,
     upvoteCount: getUpvoteCount(i.id),
     commentCount: all.filter((c) => c.ideaId === i.id).length,
+    isOwner: ownerHash !== undefined ? ownerHash === i.authorTokenHash : undefined,
   }));
   if (params.sort === "upvotes") {
     withCounts.sort((a, b) => b.upvoteCount - a.upvoteCount ||
@@ -55,13 +60,14 @@ export const listIdeas = (params: {
 };
 
 export const getIdeaById = (id: string, voterToken?: string): IdeaDetail | null => {
-  const idea = getIdeas().find((i) => i.id === id && i.status === "published");
+  const idea = getIdeas().find((i) => i.id === id);
   if (!idea) return null;
   return {
     ...idea,
     upvoteCount: getUpvoteCount(id),
     commentCount: getComments().filter((c) => c.ideaId === id).length,
     myUpvote: voterToken !== undefined ? hasUpvoted(id, voterToken) : undefined,
+    isOwner: voterToken !== undefined ? hashToken(voterToken) === idea.authorTokenHash : undefined,
   };
 };
 
@@ -72,6 +78,8 @@ export const createIdea = (input: {
   description: string;
   categoryId: string;
   categoryOther?: string;
+  websiteUrl?: string;
+  signalUrl?: string;
   authorPseudonym?: string;
   ownerToken: string;
 }): CreateIdeaResult => {
@@ -88,6 +96,11 @@ export const createIdea = (input: {
   if (categoryId === "other" && !input.categoryOther?.trim())
     return { ok: false, error: "categoryOther is required when categoryId is 'other'" };
 
+  const websiteUrl = input.websiteUrl?.trim() || undefined;
+  const signalUrl = input.signalUrl?.trim() || undefined;
+  if (websiteUrl) { try { new URL(websiteUrl); } catch { return { ok: false, error: "invalid websiteUrl" }; } }
+  if (signalUrl) { try { new URL(signalUrl); } catch { return { ok: false, error: "invalid signalUrl" }; } }
+
   const tokenHash = hashToken(input.ownerToken);
   const idea: IdeaItem = {
     id: genId(),
@@ -95,6 +108,8 @@ export const createIdea = (input: {
     description,
     categoryId: categoryId as IdeaCategoryId,
     categoryOther: categoryId === "other" ? input.categoryOther?.trim() : undefined,
+    websiteUrl,
+    signalUrl,
     authorOwnerId: toOwnerId(tokenHash),
     authorTokenHash: tokenHash,
     authorPseudonym: input.authorPseudonym?.trim() || undefined,
@@ -113,7 +128,10 @@ export const updateIdeaById = (id: string, input: {
   description?: string;
   categoryId?: string;
   categoryOther?: string;
+  websiteUrl?: string;
+  signalUrl?: string;
   authorPseudonym?: string;
+  status?: string;
   ownerToken: string;
 }): UpdateIdeaResult => {
   const existing = getIdeas().find((i) => i.id === id);
@@ -121,7 +139,7 @@ export const updateIdeaById = (id: string, input: {
   if (hashToken(input.ownerToken) !== existing.authorTokenHash)
     return { ok: false, error: "forbidden", status: 403 };
 
-  const patch: Partial<Pick<IdeaItem, "title" | "description" | "categoryId" | "categoryOther" | "authorPseudonym">> = {};
+  const patch: Partial<Pick<IdeaItem, "title" | "description" | "categoryId" | "categoryOther" | "authorPseudonym" | "websiteUrl" | "signalUrl" | "status">> = {};
   if (input.title !== undefined) {
     const t = input.title.trim();
     if (t.length < TITLE_MIN || t.length > TITLE_MAX)
@@ -141,6 +159,22 @@ export const updateIdeaById = (id: string, input: {
   }
   if (input.categoryOther !== undefined) patch.categoryOther = input.categoryOther.trim() || undefined;
   if (input.authorPseudonym !== undefined) patch.authorPseudonym = input.authorPseudonym.trim() || undefined;
+  if (input.websiteUrl !== undefined) {
+    const u = input.websiteUrl.trim();
+    if (u) { try { new URL(u); } catch { return { ok: false, error: "invalid websiteUrl" }; } }
+    patch.websiteUrl = u || undefined;
+  }
+  if (input.signalUrl !== undefined) {
+    const u = input.signalUrl.trim();
+    if (u) { try { new URL(u); } catch { return { ok: false, error: "invalid signalUrl" }; } }
+    patch.signalUrl = u || undefined;
+  }
+  if (input.status === "published" || input.status === "archived") patch.status = input.status;
+
+  const resultingCategory = patch.categoryId ?? existing.categoryId;
+  if (resultingCategory === "other" && !(patch.categoryOther ?? existing.categoryOther)?.trim())
+    return { ok: false, error: "categoryOther is required when categoryId is 'other'" };
+  if (resultingCategory !== "other") patch.categoryOther = undefined;
 
   const idea = updateIdea(id, patch);
   if (!idea) return { ok: false, error: "not found", status: 404 };
@@ -157,9 +191,10 @@ export const deleteIdeaById = (id: string, ownerToken: string): DeleteResult => 
   return { ok: true };
 };
 
-export const listCommentsForIdea = (ideaId: string): IdeaComment[] =>
+export const listCommentsForIdea = (ideaId: string, ownerToken?: string): (IdeaComment & { isOwner?: boolean })[] =>
   getComments()
     .filter((c) => c.ideaId === ideaId)
+    .map(comment => ({ ...comment, isOwner: ownerToken ? hashToken(ownerToken) === comment.authorTokenHash : undefined }))
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
 export type CreateCommentResult = { ok: true; comment: IdeaComment } | { ok: false; error: string; status?: number };

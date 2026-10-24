@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
 import type { Request, Response } from "express";
 import { nip19, verifyEvent, type Event } from "nostr-tools";
-import { deriveNostrCredentials } from "./nostr-crypto";
-import { CHALLENGE_TTL_SEC, getNostrChallengeStore } from "./nostr-challenge-store";
+import { deriveNostrCredentials } from "./nostr-crypto.js";
+import { CHALLENGE_TTL_SEC, getNostrChallengeStore } from "./nostr-challenge-store.js";
 
 /** Custom auth event kind for Dvadsatjeden community-api (documented in API_CONTRACTS). */
 export const NOSTR_AUTH_EVENT_KIND = 27241;
@@ -75,7 +75,9 @@ export async function nostrAuthVerifyPost(req: Request, res: Response): Promise<
     return;
   }
 
-  if (!verifyEvent(event)) {
+  let verified = false;
+  try { verified = verifyEvent(event); } catch { /* malformed input */ }
+  if (!verified) {
     res.status(400).json({ error: "invalid_event_signature" });
     return;
   }
@@ -129,7 +131,6 @@ export async function nostrAuthVerifyPost(req: Request, res: Response): Promise<
     res.json({
       ownerId: cred.ownerId,
       rsvpToken: cred.rsvpToken,
-      dataKey: cred.dataKey,
       mnemonic: cred.mnemonic,
       nostrPubkeyHex: pubkeyHex,
       npub,
@@ -139,4 +140,4 @@ export async function nostrAuthVerifyPost(req: Request, res: Response): Promise<
   }
 }
 
-export { _resetNostrChallengeStoreForTesting as _resetNostrChallengesForTesting } from "./nostr-challenge-store";
+export { _resetNostrChallengeStoreForTesting as _resetNostrChallengesForTesting } from "./nostr-challenge-store.js";

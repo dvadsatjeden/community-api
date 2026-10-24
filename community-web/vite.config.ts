@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import { createRequire } from "node:module";
 import { computeDvcBuildId } from "./vite-build-id";
 const require = createRequire(import.meta.url);
@@ -10,11 +11,20 @@ const pkg = require("./package.json") as { version: string };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const pluginAssets = path.resolve(__dirname, "../wp-content/plugins/dvadsatjeden-community/assets");
+const outDir = path.resolve(__dirname, "dist");
 
-function writeWpBuildMetaPlugin(outputRoot: string, version: string, buildId: string): Plugin {
+/**
+ * Zápis `community-app.version.json` + `.dvc-build-meta.json` až v `closeBundle` (po PWA).
+ * `buildId`: pozri `vite-build-id.ts` (CI/env alebo hash `package.json` + `src/`).
+ * Súbor **nie** v Workbox precache — fetch ide na sieť.
+ */
+function writeStandaloneBuildMetaPlugin(
+  outputRoot: string,
+  version: string,
+  buildId: string,
+): Plugin {
   return {
-    name: "dvc-wp-build-meta",
+    name: "dvc-standalone-build-meta",
     apply: "build",
     closeBundle: {
       order: "post",
@@ -22,7 +32,10 @@ function writeWpBuildMetaPlugin(outputRoot: string, version: string, buildId: st
         const builtAt = new Date().toISOString();
         const meta = { version, buildId, builtAt };
         writeFileSync(path.join(outputRoot, ".dvc-build-meta.json"), `${JSON.stringify(meta)}\n`);
-        writeFileSync(path.join(outputRoot, "community-app.version.json"), `${JSON.stringify(meta)}\n`);
+        writeFileSync(
+          path.join(outputRoot, "assets", "community-app.version.json"),
+          `${JSON.stringify(meta)}\n`,
+        );
       },
     },
   };
@@ -34,34 +47,57 @@ export default defineConfig(({ command }) => {
   const buildId = command === "build" ? computeDvcBuildId(pkgPath, srcRoot) : "dev";
 
   return {
-    // Oproti `community-app.js` v WP plugine — nie koreň domény. Inak workery/ chunky idú na `/assets/...` a dajú 404.
-    base: "./",
+    base: "/",
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __APP_BUILD_ID__: JSON.stringify(buildId),
     },
-    plugins: [react(), writeWpBuildMetaPlugin(pluginAssets, pkg.version, buildId)],
+    server: { host: "127.0.0.1", port: 5173 },
+    plugins: [
+      react(),
+      VitePWA({
+        strategies: "injectManifest",
+        srcDir: "src",
+        filename: "sw.ts",
+        registerType: "autoUpdate",
+        injectRegister: "auto",
+        injectManifest: {
+          globPatterns: ["**/*.{js,css,html,png,svg,wasm}"],
+        },
+        manifest: {
+          name: "Dvadsatjeden — Bitcoin komunita",
+          short_name: "Dvadsatjeden",
+          description: "Stretnutia, komunity a spoločné nápady na Slovensku a v Česku",
+          theme_color: "#08090b",
+          background_color: "#08090b",
+          display: "standalone",
+          start_url: "/",
+          scope: "/",
+          lang: "sk",
+          icons: [
+            { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+            { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+          ],
+        },
+
+      }),
+      writeStandaloneBuildMetaPlugin(outDir, pkg.version, buildId),
+    ],
     build: {
-      outDir: pluginAssets,
-      // Výstup už je v `.../plugin/assets/`. Predvolené `build.assetsDir: "assets"` dá
-      // `.../assets/assets/...` — zlé URL a 404/ HTML namiesto .wasm.
-      assetsDir: "",
-      // Do not delete `.gitkeep` and other hand-maintained files in the plugin `assets/` folder.
-      emptyOutDir: false,
-      sourcemap: true,
+      outDir,
+      assetsDir: "assets",
+      emptyOutDir: true,
+      sourcemap: false,
       rollupOptions: {
         input: path.resolve(__dirname, "index.html"),
         output: {
-          entryFileNames: "community-app.js",
-          // CSS ostáva pevné meno; ostatné assety (napr. .wasm) s hash, aby sa neprepisovali.
+          entryFileNames: "assets/community-app-[hash].js",
           assetFileNames: (info) => {
             const n = (info as { name?: string }).name ?? "asset";
-            if (n.endsWith(".css")) {
-              return "community-app[extname]";
-            }
-            return "[name]-[hash][extname]";
+            if (n.endsWith(".css")) return "assets/community-app-[hash][extname]";
+            return "assets/[name]-[hash][extname]";
           },
-          chunkFileNames: "d21c-[name]-[hash].js",
+          chunkFileNames: "assets/d21c-[name]-[hash].js",
         },
       },
     },

@@ -1,7 +1,7 @@
 /**
  * Generates icon-192.png and icon-512.png in public/.
  * Pure Node.js — no external image deps.
- * Design: dark (#0f1114) background, orange (#f7931a) rounded square inset, white ₿ glyph center.
+ * Design: black and Bitcoin orange with a geometric 21 monogram.
  */
 import { deflateSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -125,59 +125,16 @@ const vline = (buf, w, x, y0, y1, thick, r, g, b) => {
 
 const renderIcon = (size) => {
   const buf = new Uint8Array(size * size * 4);
-  // Dark background
-  fillRect(buf, size, 0, 0, size - 1, size - 1, 15, 17, 20);
-
-  const pad = Math.round(size * 0.11);
-  const rad = Math.round(size * 0.18);
-  // Orange rounded square
-  fillRoundedRect(buf, size, pad, pad, size - 1 - pad, size - 1 - pad, rad, 247, 147, 26);
-
-  // ₿ glyph (simplified: vertical bar + two bumps + two horizontal serifs)
-  const cx = size / 2;
-  const cy = size / 2;
-  const s  = size * 0.22;   // glyph scale
-  const tk = Math.max(2, Math.round(size * 0.045)); // stroke thickness
-  const wr = 255, wg = 255, wb = 255;
-
-  // Vertical stem
-  vline(buf, size, Math.round(cx - s * 0.15), Math.round(cy - s * 0.9), Math.round(cy + s * 0.9), tk, wr, wg, wb);
-
-  // Top bump (upper arc approximated as rounded rect)
-  fillRoundedRect(
-    buf, size,
-    Math.round(cx - s * 0.15), Math.round(cy - s * 0.9),
-    Math.round(cx + s * 0.65), Math.round(cy - s * 0.05),
-    Math.round(s * 0.35), wr, wg, wb
-  );
-  // Hollow top bump center
-  fillRoundedRect(
-    buf, size,
-    Math.round(cx - s * 0.15) + tk * 2, Math.round(cy - s * 0.9) + tk * 2,
-    Math.round(cx + s * 0.45), Math.round(cy - s * 0.05) - tk,
-    Math.round(s * 0.2), 247, 147, 26
-  );
-
-  // Bottom bump
-  fillRoundedRect(
-    buf, size,
-    Math.round(cx - s * 0.15), Math.round(cy - s * 0.05),
-    Math.round(cx + s * 0.75), Math.round(cy + s * 0.9),
-    Math.round(s * 0.38), wr, wg, wb
-  );
-  // Hollow bottom bump center
-  fillRoundedRect(
-    buf, size,
-    Math.round(cx - s * 0.15) + tk * 2, Math.round(cy - s * 0.05) + tk * 2,
-    Math.round(cx + s * 0.55), Math.round(cy + s * 0.9) - tk,
-    Math.round(s * 0.22), 247, 147, 26
-  );
-
-  // Top serif ticks on the stem
-  hline(buf, size, Math.round(cx - s * 0.45), Math.round(cx + s * 0.05), Math.round(cy - s * 0.9), tk - 1, wr, wg, wb);
-  // Bottom serif ticks
-  hline(buf, size, Math.round(cx - s * 0.45), Math.round(cx + s * 0.05), Math.round(cy + s * 0.9), tk - 1, wr, wg, wb);
-
+  const dark = [8, 9, 11], orange = [247, 147, 26];
+  fillRect(buf, size, 0, 0, size - 1, size - 1, ...dark);
+  const scale = size / 96;
+  fillRoundedRect(buf, size, Math.round(14 * scale), Math.round(14 * scale), Math.round(82 * scale), Math.round(82 * scale), Math.round(12 * scale), ...orange);
+  const line = (x0, y0, x1, y1) => fillRect(buf, size,
+    Math.round((Math.min(x0, x1) - 2.5) * scale), Math.round((Math.min(y0, y1) - 2.5) * scale),
+    Math.round((Math.max(x0, x1) + 2.5) * scale), Math.round((Math.max(y0, y1) + 2.5) * scale), ...dark);
+  line(27, 37, 27, 32); line(27, 32, 49, 32); line(49, 32, 49, 45);
+  line(29, 45, 49, 45); line(29, 45, 29, 64); line(29, 64, 51, 64);
+  line(62, 32, 68, 32); line(68, 32, 68, 64);
   return buildPNG(buf, size, size);
 };
 

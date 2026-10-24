@@ -52,10 +52,12 @@ export type IdeaItem = {
   description: string;
   categoryId: IdeaCategoryId;
   categoryOther?: string;
+  websiteUrl?: string;
+  signalUrl?: string;
   authorOwnerId: string;
   authorTokenHash: string;
   authorPseudonym?: string;
-  status: "published";
+  status: "published" | "archived";
   createdAt: string;
   updatedAt: string;
 };

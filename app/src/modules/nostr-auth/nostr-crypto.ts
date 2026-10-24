@@ -14,16 +14,17 @@ export function sha256HexUtf8(value: string): string {
 export function deriveNostrCredentials(
   secret: string,
   pubkeyHex: string
-): { ownerId: string; rsvpToken: string; dataKey: string; mnemonic: string } {
+): { ownerId: string; rsvpToken: string; mnemonic: string } {
   const pk = pubkeyHex.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(pk)) {
     throw new Error("Invalid pubkey hex");
   }
   const innerHex = createHmac("sha256", secret).update(`nostr:v1:${pk}`, "utf8").digest("hex");
-  const ownerId = sha256HexUtf8(`owner:${innerHex}`).slice(0, 32);
-  const rsvpToken = sha256HexUtf8(`rsvp:${innerHex}`);
-  const dataKey = sha256HexUtf8(`key:${innerHex}`);
   const mnemonicEntropy = createHash("sha256").update(`evolu:${innerHex}`, "utf8").digest().subarray(0, 16);
   const mnemonic = entropyToMnemonic(mnemonicEntropy, wordlist);
-  return { ownerId, rsvpToken, dataKey, mnemonic };
+  return {
+    ownerId: sha256HexUtf8(`owner:${mnemonic}`).slice(0, 32),
+    rsvpToken: sha256HexUtf8(`rsvp:${mnemonic}`),
+    mnemonic,
+  };
 }
