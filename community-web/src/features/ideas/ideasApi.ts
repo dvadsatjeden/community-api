@@ -7,17 +7,21 @@ export type IdeaItem = {
   description: string;
   categoryId: IdeaCategoryId;
   categoryOther?: string;
+  websiteUrl?: string;
+  signalUrl?: string;
   authorOwnerId: string;
   authorPseudonym?: string;
-  status: "published";
+  status: "published" | "archived";
   createdAt: string;
   updatedAt: string;
   upvoteCount: number;
   commentCount: number;
   myUpvote?: boolean;
+  isOwner?: boolean;
 };
 
 export type IdeaComment = {
+  isOwner?: boolean;
   id: string;
   ideaId: string;
   kind: IdeaCommentKind;
@@ -46,12 +50,17 @@ export const fetchIdeas = async (apiBase: string, params: {
   category?: string;
   q?: string;
   sort?: "newest" | "upvotes";
+  showArchived?: boolean;
+  ownerToken?: string;
 }): Promise<IdeaItem[]> => {
   const sp = new URLSearchParams();
   if (params.category) sp.set("category", params.category);
   if (params.q) sp.set("q", params.q);
   if (params.sort) sp.set("sort", params.sort);
-  const r = await fetch(`${apiBase}/v1/ideas?${sp.toString()}`);
+  if (params.showArchived) sp.set("showArchived", "1");
+  const r = await fetch(`${apiBase}/v1/ideas?${sp.toString()}`, {
+    headers: params.ownerToken ? { "X-Anonymous-Token": params.ownerToken } : {},
+  });
   if (!r.ok) throw new Error(`${r.status}`);
   const data = (await r.json()) as { items: IdeaItem[] };
   return data.items;
@@ -65,15 +74,32 @@ export const fetchIdea = async (apiBase: string, id: string, voterToken?: string
   return r.json() as Promise<IdeaItem>;
 };
 
-export const createIdea = async (apiBase: string, ownerToken: string, payload: {
+export type IdeaFormPayload = {
   title: string;
   description: string;
   categoryId: IdeaCategoryId;
   categoryOther?: string;
+  websiteUrl?: string;
+  signalUrl?: string;
   authorPseudonym?: string;
-}): Promise<IdeaItem> => {
+};
+
+export const createIdea = async (apiBase: string, ownerToken: string, payload: IdeaFormPayload): Promise<IdeaItem> => {
   const r = await fetch(`${apiBase}/v1/ideas`, {
     method: "POST",
+    headers: headers(ownerToken),
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const err = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `${r.status}`);
+  }
+  return r.json() as Promise<IdeaItem>;
+};
+
+export const updateIdea = async (apiBase: string, ownerToken: string, id: string, payload: Partial<IdeaFormPayload> & { status?: "published" | "archived" }): Promise<IdeaItem> => {
+  const r = await fetch(`${apiBase}/v1/ideas/${encodeURIComponent(id)}`, {
+    method: "PATCH",
     headers: headers(ownerToken),
     body: JSON.stringify(payload),
   });
@@ -92,8 +118,8 @@ export const deleteIdea = async (apiBase: string, ownerToken: string, id: string
   if (!r.ok && r.status !== 204) throw new Error(`${r.status}`);
 };
 
-export const fetchComments = async (apiBase: string, ideaId: string): Promise<IdeaComment[]> => {
-  const r = await fetch(`${apiBase}/v1/ideas/${encodeURIComponent(ideaId)}/comments`);
+export const fetchComments = async (apiBase: string, ideaId: string, ownerToken?: string): Promise<IdeaComment[]> => {
+  const r = await fetch(`${apiBase}/v1/ideas/${encodeURIComponent(ideaId)}/comments`, { headers: headers(ownerToken) });
   if (!r.ok) throw new Error(`${r.status}`);
   const data = (await r.json()) as { items: IdeaComment[] };
   return data.items;
@@ -124,14 +150,15 @@ export const deleteComment = async (apiBase: string, ownerToken: string, ideaId:
   if (!r.ok && r.status !== 204) throw new Error(`${r.status}`);
 };
 
-export const toggleUpvote = async (apiBase: string, voterToken: string, ideaId: string): Promise<{ upvoted: boolean; upvoteCount: number }> => {
+export const toggleUpvote = async (apiBase: string, voterToken: string, ideaId: string, currentlyUpvoted = false): Promise<{ upvoted: boolean; upvoteCount: number }> => {
   const r = await fetch(`${apiBase}/v1/ideas/${encodeURIComponent(ideaId)}/upvote`, {
-    method: "POST",
+    method: currentlyUpvoted ? "DELETE" : "POST",
     headers: headers(voterToken),
     body: JSON.stringify({ voterToken }),
   });
   if (!r.ok) throw new Error(`${r.status}`);
-  return r.json() as Promise<{ upvoted: boolean; upvoteCount: number }>;
+  const result = await r.json() as { upvoteCount: number };
+  return { ...result, upvoted: !currentlyUpvoted };
 };
 
 export const fetchMyUpvotes = async (apiBase: string, voterToken: string): Promise<Record<string, boolean>> => {

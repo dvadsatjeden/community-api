@@ -8,10 +8,9 @@ export type DerivedAccount = {
   mnemonic: string;
   ownerId: string;
   rsvpToken: string;
-  dataKey: string;
   /** Persistované: false = seed ešte uložený na zariadení, používateľ musí potvrdiť zálohu. */
   seedBackedUpConfirmed?: boolean;
-  /** `nostr` = identita z Nostr prihlásenia (owner/rsvp z API), BIP-39 slová pre Evolu z servera. */
+  /** `nostr` = identita z Nostr prihlásenia (owner/rsvp z API), BIP-39 slová účtu zo servera. */
   authMethod?: AuthMethod;
   /** Bech32 npub (zobrazenie / kontext zálohy). */
   nostrPubkeyBech32?: string;
@@ -51,7 +50,6 @@ export const deriveFromMnemonic = (mnemonic: string): DerivedAccount => {
     mnemonic: normalized,
     ownerId: hash(`owner:${normalized}`).slice(0, 32),
     rsvpToken: hash(`rsvp:${normalized}`),
-    dataKey: hash(`key:${normalized}`),
     seedBackedUpConfirmed: false,
   };
 };

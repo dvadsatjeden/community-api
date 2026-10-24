@@ -12,7 +12,6 @@ export type NostrChallengeResponse = {
 export type NostrVerifySuccess = {
   ownerId: string;
   rsvpToken: string;
-  dataKey: string;
   mnemonic: string;
   nostrPubkeyHex: string;
   npub: string;
@@ -44,7 +43,6 @@ export async function postNostrAuthVerify(apiBaseUrl: string, event: Event): Pro
   if (
     typeof body.ownerId !== "string" ||
     typeof body.rsvpToken !== "string" ||
-    typeof body.dataKey !== "string" ||
     typeof body.mnemonic !== "string"
   ) {
     throw new Error("invalid_verify_payload");

@@ -1,0 +1,9 @@
+.git
+.env*
+**/node_modules
+**/dist
+standalone-dist
+wp-content
+archive
+data
+*.zip

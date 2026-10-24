@@ -1,7 +1,8 @@
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { BunkerSigner, parseBunkerInput } from "nostr-tools/nip46";
-import { finalizeEvent, generateSecretKey, nip19, SimplePool, type Event, type EventTemplate } from "nostr-tools";
+import { generateSecretKey, SimplePool, type Event, type EventTemplate } from "nostr-tools";
+import { nostrAuthErrorToCode } from "./nostrErrors";
 import type { DerivedAccount } from "../account/seedRecovery";
 import { fetchNostrAuthChallenge, NOSTR_AUTH_EVENT_KIND, postNostrAuthVerify } from "./nostrAuthApi";
 
@@ -44,20 +45,6 @@ function humanizeNostrAuthError(code: string): string {
   return trimmed.replace(/_/g, " ");
 }
 
-/** nip46 často rejectuje string namiesto Error → starý catch ukazoval vždy „nostr login failed“. */
-function nostrAuthErrorToCode(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "string") return e;
-  if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
-    return (e as { message: string }).message;
-  }
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return "nostr_login_failed";
-  }
-}
-
 /** `bunker://` regex v nostr-tools vyžaduje hex pubkey v lowercase. */
 function normalizeBunkerConnectionInput(raw: string): string {
   const s = raw.trim();
@@ -88,19 +75,20 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [bunkerInput, setBunkerInput] = useState("");
-  const [nsecInput, setNsecInput] = useState("");
+  const [signerAuthUrl, setSignerAuthUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
     setBusy(false);
     setBunkerInput("");
-    setNsecInput("");
+    setSignerAuthUrl(null);
   }, [isOpen]);
 
   const runVerify = useCallback(
     async (sign: (tpl: EventTemplate) => Promise<Event>) => {
       setError(null);
+      setSignerAuthUrl(null);
       setBusy(true);
       try {
         const ch = await fetchNostrAuthChallenge(apiBaseUrl);
@@ -114,7 +102,6 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
           mnemonic: v.mnemonic.trim(),
           ownerId: v.ownerId,
           rsvpToken: v.rsvpToken,
-          dataKey: v.dataKey,
           seedBackedUpConfirmed: false,
           authMethod: "nostr",
           nostrPubkeyBech32: v.npub || undefined,
@@ -150,11 +137,16 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
       const bunkerSignerOpts = {
         pool,
         onauth: (authUrl: string) => {
-          try {
-            window.open(authUrl, "_blank", "noopener,noreferrer");
-          } catch {
-            /* ignore */
+          let safeUrl: URL;
+          try { safeUrl = new URL(authUrl); } catch { setError("Podpisovač vrátil neplatný odkaz na overenie."); return; }
+          if (safeUrl.protocol !== "https:" || safeUrl.username || safeUrl.password) {
+            setError("Odkaz na overenie podpisovača musí používať HTTPS.");
+            return;
           }
+          // With noopener browsers may return null even when opened; always offer a manual link.
+          setSignerAuthUrl(safeUrl.href);
+          try { window.open(safeUrl.href, "_blank", "noopener,noreferrer"); }
+          catch { setError("Overenie sa nepodarilo otvoriť automaticky. Použi odkaz nižšie."); }
         },
       };
 
@@ -180,22 +172,6 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
     });
   };
 
-  const onNsec = (): void => {
-    void runVerify(async (tpl) => {
-      const raw = nsecInput.trim();
-      if (!raw) throw new Error("nsec_required");
-      let secret: Uint8Array;
-      try {
-        const decoded = nip19.decode(raw);
-        if (decoded.type !== "nsec") throw new Error("expected_nsec");
-        secret = decoded.data as Uint8Array;
-      } catch {
-        throw new Error("invalid_nsec");
-      }
-      return finalizeEvent(tpl, secret);
-    });
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -206,10 +182,15 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
         </button>
         <h2 className="dvcModalTitle">Prihlásenie cez Nostr</h2>
         <p className="dvcMuted dvcMuted--sm" style={{ marginBottom: "16px" }}>
-          Vyber spôsob podpisu výzvy. Server overí tvoj kľúč a vytvorí účet zodpovedajúci tejto komunite.
+          Podpíš výzvu rozšírením alebo vzdialeným podpisovačom. Server po overení vydá obnoviteľný účet. Jeho 12 slov pozná aj server; svoj Nostr súkromný kľúč sem nevkladáš.
         </p>
 
         {error ? <p className="dvcFieldError" style={{ marginBottom: "12px" }}>{error}</p> : null}
+
+        {signerAuthUrl ? <div className="dvcCard" role="status">
+          <p className="dvcMuted">Potvrď prihlásenie u svojho podpisovača. Ak sa okno neotvorilo, použi tento odkaz.</p>
+          <a className="dvcBtn dvcBtnPrimary" href={signerAuthUrl} target="_blank" rel="noopener noreferrer">Otvoriť overenie podpisovača</a>
+        </div> : null}
 
         <div className="dvcNostrMethodGrid">
           <MethodCard
@@ -246,33 +227,7 @@ export const NostrSignInModal = (props: NostrSignInModalProps): ReactElement | n
             </button>
           </div>
 
-          <div className="dvcNostrMethodBlock dvcNostrMethodBlock--warn">
-            <span className="dvcNostrMethodIcon" aria-hidden>
-              <IconWarn />
-            </span>
-            <span className="dvcNostrMethodTitle">Vložiť nsec (súkromný kľúč)</span>
-            <span className="dvcNostrMethodDesc dvcNostrMethodDesc--warn">Neodporúčané — kľúč môže byť odhalený (clipboard, malware).</span>
-            <textarea
-              className="dvcTextarea dvcNostrNsecInput"
-              placeholder="nsec1…"
-              value={nsecInput}
-              onChange={(e) => setNsecInput(e.target.value)}
-              spellCheck={false}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              disabled={busy}
-              rows={2}
-            />
-            <button
-              className="dvcBtn dvcBtnPrimary dvcNostrMethodSubmit"
-              type="button"
-              onClick={onNsec}
-              disabled={busy || nsecInput.trim().length === 0}
-            >
-              Podpísať cez nsec
-            </button>
-          </div>
+
         </div>
 
         <div className="dvcRow" style={{ justifyContent: "flex-end", marginTop: "16px" }}>

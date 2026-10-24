@@ -6,8 +6,8 @@ import { randomUUID } from "node:crypto";
 // Use a temp file per test run so tests never touch production data.
 process.env.RSVP_PERSIST_PATH = join(tmpdir(), `rsvp-test-${randomUUID()}.json`);
 
-import { _resetCacheForTesting } from "./rsvp-persistence";
-import { getMyRsvp, getRsvpCounts, removeRsvp, submitRsvp } from "./rsvp.controller";
+import { _resetCacheForTesting } from "./rsvp-persistence.js";
+import { getMyRsvp, getRsvpCounts, removeRsvp, submitRsvp } from "./rsvp.controller.js";
 
 beforeEach(() => {
   _resetCacheForTesting();

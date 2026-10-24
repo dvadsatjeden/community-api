@@ -1,4 +1,4 @@
-import type { IdeaCategoryId } from "../contracts";
+import type { IdeaCategoryId } from "../contracts.js";
 
 export const CATEGORIES: Array<{ id: IdeaCategoryId; label: string }> = [
   { id: "infra",     label: "Infraštruktúra" },

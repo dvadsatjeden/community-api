@@ -1,168 +1,75 @@
-# dvadsatjeden.org — komunitná aplikácia
+# Dvadsatjeden — komunitná aplikácia
 
-Monorepozitár komunitnej platformy pre slovensko-českú Bitcoin komunitu [dvadsatjeden.org](https://dvadsatjeden.org). Obsahuje backend API, React PWA a WordPress plugin.
+Samostatná React PWA pre Bitcoin komunity na Slovensku a v Česku. WordPress slúži na obsah a ako vymeniteľný zdroj údajov; aplikácia sa doň nevkladá.
 
-> Licencia: **MIT** — kód je slobodne použiteľný, upraviteľný a šíriteľný.
+- `community-web/`: React 19, Vite, Leaflet, inštalovateľná PWA.
+- `app/`: Express 5 + TypeScript, Node.js 24, SQLite s transakciami a WAL.
+- `integrations/wordpress/community-source.php`: voliteľný malý API exportér existujúcej mapy komunít.
+- `archive/wordpress-plugin/`: pôvodný app plugin, mimo aktívneho buildu.
 
----
-
-## Čo to je
-
-Webová progresívna aplikácia (PWA) zabudovaná do WordPress stránky dvadsatjeden.org. Slúži ako komunitný hub — agreguje Bitcoin eventy na Slovensku a v Česku, zobrazuje miesta kde možno platiť bitcoinom, a umožňuje členom sledovať komunity a RSVP na eventy, všetko anonymne bez registrácie.
-
----
+Produkcia: `app.dvadsatjeden.org` → `api.dvadsatjeden.org`. Docker Compose používa existujúci Traefik v sieti `passbolt_default`.
 
 ## Funkcie
 
-### Eventy
-- Zoznam nadchádzajúcich Bitcoin eventov (meetupy, konferencie, Bitcoin Pivo stretnutia)
-- Filtrovanie podľa krajiny, regiónu a kategórie
-- Badges: kategória eventu, **Vstup voľný** (zelený) ak je vstup zadarmo
-- Tlačidlo **Kúpiť vstupenku** pri platených eventoch s linkom na predaj
-- Detail eventu v modali: popis, miesto, čas, obrázok, RSVP
+Udalosti a kalendár, mapa komunít, anonymné RSVP, nápady/projekty a komentáre, voliteľné Nostr prihlásenie a push upozornenia. Účet vzniká z 12 slov bez emailu. Samotné prezeranie účet nevyžaduje.
 
-### RSVP (anonymné)
-- Tri stavy: **Zúčastním sa / Možno / Zrušiť**
-- Identita je odvodená z BIP-39 seed phrase (12 slov) — žiadna registrácia, žiadny email
-- RSVP počty sú viditeľné pre všetkých
-- Sync cez [Evolu](https://evolu.dev) (lokálna SQLite + šifrovaný P2P sync)
+RSVP a obsah sa ukladajú na serveri; Evolu bolo odstránené. Obnova pomocou rovnakých slov obnoví prístup aj na inom zariadení. Aplikácia potvrdí zmenu až po odpovedi API; offline zápisy neukladá do fronty. Offline je dostupný predtým načítaný aplikačný obal, nie kompletná mapa ani živé dáta.
 
-### Anonymný účet (BIP-39 seed)
-- Účet = 12 náhodných slov (BIP-39 mnemonic)
-- Seed sa ukladá len v prehliadači (nikdy sa neposiela na server)
-- Exportovateľný, importovateľný — funguje na viacerých zariadeniach
+## Komunity cez API
 
-### Mapa
-- Interaktívna Leaflet mapa s dvoma vrstvami:
-  - **Oranžové** markery — eventy s dátumom a miestom
-  - **Modré** markery — Signal skupiny komunít
-- Tlačidlo **Moja poloha** — geolokácia, priblíženie mapy, otvorenie najbližšej komunity
-- Legenda vrstiev
-- Obchodníci (pripravené, čoskoro)
+`COMMUNITIES_SOURCE_URL` určuje externý JSON endpoint. API ho obnovuje po štarte a každých 15 minút; otvorená PWA načítava aktuálny zoznam každú minútu a pri návrate do okna.
 
-### Komunity (Signal skupiny)
-- Mapa lokálnych komunít s markerom a logom
-- Modal komunity: logo, názov, mesto, nadchádzajúce akcie v danom meste
-- Tlačidlo **Otvoriť Signal skupinu** — presmeruje cez rate-limitovaný proxy endpoint (URL nie je v JS kóde)
+Úspešné načítanie **nahradí** zoznam: pribudnuté komunity sa pridajú, odstránené zmiznú. Výpadok, neplatný JSON alebo chybný záznam zachová posledný úspešný zoznam v SQLite aj po reštarte. Prázdne `items: []` znamená platný prázdny zoznam. API neodhadne zánik komunity samo — musí ho zohľadniť autoritatívny zdroj.
 
-### Kalendár
-- Zoskupenie eventov podľa mesiacov
-- Zobrazenie dňa, dátumu, času, kategórie, miesta
-- Badge **Vstup voľný** v riadku eventu
-- Tlačidlo **+ Pridať** — odkaz na formulár pre pridanie nového eventu
+Formát, stabilné ID a stav synchronizácie opisuje [API kontrakt](docs/API_CONTRACTS.md). Zdroj môže byť akékoľvek kompatibilné API; nemusí to byť WordPress.
 
-### Nástroje (Úvod)
-- Prehľad Bitcoin nástrojov: Mempool.space, BTCPay Server, BTC Map, Hydranode, SATFLUX, DCA Bot, Vekslák, CBDC Tracker
-- Sekcia „Ako to funguje" — vysvetlenie anonymného účtu a RSVP
+## Vývoj
 
-### Web push notifikácie
-- Voliteľné push notifikácie o nových eventoch (VAPID)
-- Subscribe/unsubscribe bez registrácie
+Použi Node.js 24 (`nvm use`). Backend a frontend majú samostatné lockfiles.
 
-### PWA
-- Inštalovateľná ako aplikácia na mobile aj desktopu
-- Service worker, offline fallback
-
----
-
-## Architektúra
-
-```
-Prehliadač
-  ├── www.dvadsatjeden.org (WordPress, externý hosting)
-  │     └── WP plugin shortcode → načíta React PWA bundle
-  └── app.dvadsatjeden.org (standalone PWA, Nginx + Docker)
-
-api.dvadsatjeden.org (Express API, Docker, tento server)
-  ├── GET  /v1/events              — zoznam eventov (s geocodingom)
-  ├── GET  /v1/venues              — miesta na mape
-  ├── GET  /v1/communities         — komunity (bez URL)
-  ├── GET  /v1/communities/:id/join — presmerovanie na Signal (rate-limited)
-  ├── GET  /v1/articles            — proxy WP článkov
-  ├── POST /v1/rsvp                — RSVP hlas
-  ├── GET  /v1/rsvp/mine           — moje RSVP (podľa anon tokenu)
-  ├── POST /v1/push/subscribe      — Web Push subscribe
-  └── POST /v1/import/run          — manuálny import eventov (Bearer)
-```
-
-### Komponenty
-
-| Adresár | Obsah |
-|---|---|
-| `app/` | Node.js / Express / TypeScript REST API |
-| `community-web/` | React 19 PWA (Vite build) |
-| `wp-content/plugins/dvadsatjeden-community/` | WordPress plugin (PHP) |
-
----
-
-## Lokálny vývoj
-
-### API
 ```bash
 cd app
-npm install
-cp ../.env.example ../.env   # nastav EVENTS_SOURCE_URL, IMPORT_SECRET
+npm ci
 npm run dev
 ```
 
-### Frontend
+Lokálne API bez `.env` používa port 3021, SQLite v `app/data/`, verejné zdroje a vypnuté administrátorské operácie. Ak chceš načítať vlastný env súbor: `node --env-file=../.env --import tsx src/index.ts`; produkčné cesty `/app/data/...` si pri lokálnom vývoji nahraď lokálnymi.
+
+V ďalšom termináli:
+
 ```bash
 cd community-web
-npm install
-npm run dev          # standalone dev server
-npm run build:wp     # build do WP plugin assets
+npm ci
+npm run dev
 ```
 
-### Testy
+PWA beží na `http://localhost:5173`, API na `http://localhost:3021`. Produkčnú adresu API možno zmeniť build premennou `VITE_API_BASE_URL`.
+
+## Overenie
+
+V oboch adresároch spusti `npm test` a `npm run build`. CI kontroluje testy, TypeScript, oba buildy a produkčné Docker obrazy. Testy používajú izolovanú databázu, nikdy produkčné súbory.
+
+## Nasadenie a správa
+
+Postup, konfigurácia, odpojenie starého WP pluginu, zálohy a návrat verzie sú v [prevádzkovom návode](docs/OPERATIONS.md).
+
 ```bash
-cd app && npm test          # 62 testov (Vitest)
-cd community-web && npm test # 6 testov (Vitest)
+docker compose build
+docker compose up -d --wait
 ```
 
----
+Frontend je súčasťou obrazu a neservuje rozpracovaný build z hostiteľského adresára. JS/CSS majú názvy odvodené od obsahu; HTML, service worker a metadáta verzie sa priebežne overujú zo siete.
 
-## Deployment
+Tajomstvá patria do `.env`, ktorý nie je vo verziovaní. Produkcia vyžaduje silný `IMPORT_SECRET`; bez neho sa nespustí. Nikdy nemeň `NOSTR_AUTH_SECRET` bez plánu obnovy účtov.
 
-### Backend
-```bash
-cd /opt/community-api
-docker compose up --build -d
-```
+## Dokumentácia
 
-### Frontend + WP plugin
-```bash
-cd community-web && npm run build:wp
+- [API](docs/API_CONTRACTS.md)
+- [Účty a dôvera](docs/SEED_ACCOUNT_FLOW.md)
+- [Prevádzka a zálohy](docs/OPERATIONS.md)
+- [Záznam nasadenia 1.0.0](docs/DEPLOYMENT_2026-10-23.md)
+- [Dokončené zmeny a ďalší rozvoj](docs/ROLLOUT_PHASES.md)
+- [Vizuálna identita aplikácie](docs/DESIGN.md)
+- [Vývoj, PR a CodeRabbit](docs/CONTRIBUTING.md)
 
-# Zbaliť ZIP pre WP upload
-cd ../wp-content/plugins
-rm -f /opt/community-api/dvadsatjeden-community-X.Y.Z.zip
-zip -r /opt/community-api/dvadsatjeden-community-X.Y.Z.zip dvadsatjeden-community/ \
-  --exclude "*/assets/*.map"
-```
-
-Potom nahrať ZIP cez **WP Admin → Plugins → Add New → Upload Plugin**.
-
-Podrobnosti v [`CLAUDE.md`](./CLAUDE.md).
-
----
-
-## Prispieť — hľadáme dobrovoľníkov
-
-Projekt je open-source (MIT) a vítame pomoc od komunity. Ak ti nie je ľahostajné ako vyzerá Bitcoin komunita na Slovensku a v Česku, môžeš prispieť:
-
-- **Frontend (React/TypeScript)** — nové funkcie, UX vylepšenia, preklady
-- **Backend (Node.js/Express)** — nové API endpointy, optimalizácie
-- **WordPress (PHP)** — vylepšenia pluginu, integrácie
-- **Dizajn** — ikony, ilustrácie, animácie
-- **Obsah** — popis komunít, kategórie eventov, texty
-- **Testovanie** — hlásenie bugov, návrhy zlepšení
-
-Otvor **Issue** alebo **Pull Request** na GitHube. Otázky a diskusia v Signal skupinách komunít.
-
----
-
-## Licencia
-
-MIT © dvadsatjeden.org
-
-Slobodne použi, uprav a zdieľaj. Ak postavíš niečo na tomto kóde pre svoju Bitcoin komunitu, daj vedieť.
+Projekt je určený na jednu inštanciu API s lokálnou SQLite. Viac inštancií potrebuje samostatný návrh úložiska a distribuovaných limitov; samotné zapnutie Redis túto vlastnosť nemení.

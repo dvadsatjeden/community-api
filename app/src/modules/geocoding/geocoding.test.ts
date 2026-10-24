@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 
 process.env.GEOCODE_CACHE_PATH = join(tmpdir(), `geocode-test-${randomUUID()}.json`);
 
-import { _resetForTesting, getCachedCoords, normalizeAddress, scheduleGeocoding } from "./geocoding";
+import { _resetForTesting, getCachedCoords, normalizeAddress, scheduleGeocoding } from "./geocoding.js";
 
 beforeEach(() => {
   _resetForTesting();

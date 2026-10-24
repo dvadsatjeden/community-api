@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 
 process.env.IDEAS_PERSIST_PATH = join(tmpdir(), `ideas-test-${randomUUID()}.json`);
 
-import { _resetCacheForTesting } from "./ideas-persistence";
+import { _resetCacheForTesting } from "./ideas-persistence.js";
 import {
   createComment,
   createIdea,
@@ -19,7 +19,7 @@ import {
   updateCommentById,
   updateIdeaById,
   upvoteIdea,
-} from "./ideas.controller";
+} from "./ideas.controller.js";
 
 beforeEach(() => {
   _resetCacheForTesting();
@@ -136,15 +136,15 @@ describe("deleteIdeaById", () => {
 });
 
 describe("upvoteIdea + getMyIdeaUpvotes", () => {
-  it("toggles upvote", () => {
+  it("sets an upvote idempotently", () => {
     const c = createIdea({ title: "Upvoteable idea", description: "A detailed description that is long enough.", categoryId: "tools", ownerToken: "author" });
     if (!c.ok) throw new Error();
     const r1 = upvoteIdea(c.idea.id, "voter1");
     expect(r1.upvoted).toBe(true);
     expect(r1.upvoteCount).toBe(1);
     const r2 = upvoteIdea(c.idea.id, "voter1");
-    expect(r2.upvoted).toBe(false);
-    expect(r2.upvoteCount).toBe(0);
+    expect(r2.upvoted).toBe(true);
+    expect(r2.upvoteCount).toBe(1);
   });
 
   it("multiple different voters stack", () => {

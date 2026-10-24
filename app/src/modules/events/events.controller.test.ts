@@ -6,8 +6,8 @@ import {
   stripHtml,
   shortText,
   toIso,
-} from "./events.controller";
-import type { EventItem } from "../contracts";
+} from "./events.controller.js";
+import type { EventItem } from "../contracts.js";
 
 // ── toIso ────────────────────────────────────────────────────────────────────
 
@@ -19,6 +19,12 @@ describe("toIso", () => {
   it("converts WP-style space-separated datetime", () => {
     const result = toIso("2026-05-21 18:00:00");
     expect(result).toMatch(/^2026-05-21T/);
+  });
+
+  it("converts floating venue-local dates with summer and winter offsets", () => {
+    expect(toIso("2026-05-21 18:00:00")).toBe("2026-05-21T16:00:00.000Z");
+    expect(toIso("2026-01-21 18:00:00")).toBe("2026-01-21T17:00:00.000Z");
+    expect(toIso("2026-05-21T18:00:00+02:00")).toBe("2026-05-21T16:00:00.000Z");
   });
 
   it("returns undefined for empty string", () => {
@@ -105,7 +111,7 @@ describe("normalizeEvent", () => {
 
   it("falls back to generated id when missing", () => {
     const result = normalizeEvent({ title: "No id", startsAt: "2026-06-01T10:00:00Z" }, 3);
-    expect(result!.id).toMatch(/^source-event-3-/);
+    expect(result!.id).toMatch(/^source-event-[a-f0-9]{24}$/);
   });
 
   it("strips HTML from description", () => {
@@ -199,5 +205,20 @@ describe("selectEvents", () => {
     const input = [far, near];
     selectEvents(input, { futureOnly: false, sort: "asc" });
     expect(input[0].id).toBe("far");
+  });
+});
+
+describe("stable event identity", () => {
+  it("keeps fallback ids stable across source reordering and accepts numeric source ids", () => {
+    const source = { title: "Meetup", start: "2027-01-21 18:00:00" };
+    expect(normalizeEvent(source, 1)!.id).toBe(normalizeEvent(source, 20)!.id);
+    expect(normalizeEvent({ ...source, id: 42 }, 1)!.id).toBe("42");
+  });
+  it("does not return executable source URLs", () => {
+    const source = { title: "Meetup", start: "2027-01-21 18:00:00", custom_link: "javascript:alert(1)", image: "javascript:alert(1)", extendedProps: { ticket_link: "javascript:alert(1)" } };
+    const event = normalizeEvent(source, 0)!;
+    expect(event.sourceUrl).toMatch(/^https:/);
+    expect(event.imageUrl).toBeUndefined();
+    expect(event.ticket_link).toBeUndefined();
   });
 });

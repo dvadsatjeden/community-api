@@ -1,22 +1,14 @@
-import type { EventItem } from "../contracts";
-import { scheduleGeocoding } from "../geocoding/geocoding";
-import { notifyNewEvents } from "../push/push";
+import { toDate } from "date-fns-tz";
+import { createHash } from "node:crypto";
+import type { EventItem } from "../contracts.js";
+import { scheduleGeocoding } from "../geocoding/geocoding.js";
+import { notifyNewEvents } from "../push/push.js";
 
-const fallbackEvents: EventItem[] = [
-  {
-    id: "ba-meetup-2026-05",
-    title: "BA - 21 meetup",
-    startsAt: "2026-05-21T18:00:00+02:00",
-    locationName: "Bratislava TBD",
-    city: "Bratislava",
-    category: "MeetUpy",
-    sourceUrl: "https://prevadzky.dvadsatjeden.org/wp-json/dvadsatjeden-events/v1/list?country=sk",
-  },
-];
+import { readSnapshot, transaction, writeSnapshot } from "../../storage/database.js";
+import { markImport, markImportError } from "../import/import-status.controller.js";
 
-// `null` = not yet imported/initialized.
-let cachedEvents: EventItem[] | null = null;
 let importAttempted = false;
+let pendingImport: Promise<number> | undefined;
 
 const SOURCE_URL_DEFAULT = "https://prevadzky.dvadsatjeden.org/wp-json/dvadsatjeden-events/v1/list?country=sk";
 
@@ -24,8 +16,8 @@ export const toIso = (value: unknown): string | undefined => {
   if (typeof value !== "string" || value.trim().length === 0) {
     return undefined;
   }
-  // Supports ISO strings and common WP formats like "2024-10-12 08:00:00" (treated as local time).
-  const parsed = new Date(value.replace(" ", "T"));
+  // Floating WP timestamps describe venue-local time. Explicit ISO offsets always take precedence.
+  const parsed = toDate(value.trim().replace(" ", "T"), { timeZone: process.env.EVENTS_TIME_ZONE ?? "Europe/Bratislava" });
   return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 };
 
@@ -34,6 +26,17 @@ const pickString = (...values: unknown[]): string | undefined => {
     if (typeof value === "string" && value.trim().length > 0) {
       return value.trim();
     }
+  }
+  return undefined;
+};
+
+const pickHttpUrl = (...values: unknown[]): string | undefined => {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    try {
+      const url = new URL(value.trim());
+      if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password) return url.href;
+    } catch { /* unsupported source URL */ }
   }
   return undefined;
 };
@@ -95,11 +98,10 @@ export const normalizeEvent = (event: Record<string, unknown>, index: number): E
     return null;
   }
 
-  const id =
-    pickString(event.id, event.eventId, event.slug, event.uuid) ??
-    `source-event-${index}-${startsAt}`;
-
   const title = pickString(event.title, event.name) ?? "Untitled event";
+  const sourceId = typeof event.id === "number" ? String(event.id) : pickString(event.id, event.eventId, event.slug, event.uuid);
+  const id = sourceId ?? `source-event-${createHash("sha256").update(`${title}|${startsAt}|${pickString(event.locationName, event.location, event.venue) ?? ""}`).digest("hex").slice(0, 24)}`;
+
   const endsAt =
     toIso(event.endsAt) ??
     toIso(event.end_at) ??
@@ -107,7 +109,7 @@ export const normalizeEvent = (event: Record<string, unknown>, index: number): E
     toIso(event.end) ??
     (ext ? toIso(ext.end) : undefined);
 
-  const customLink = pickString(event.custom_link, event.url, event.link);
+  const customLink = pickHttpUrl(event.custom_link, event.url, event.link);
   const rawCategory = pickString(
     event.category,
     event.categoryName,
@@ -166,27 +168,16 @@ export const normalizeEvent = (event: Record<string, unknown>, index: number): E
     ),
     category: normalizeCategoryTerm(rawCategory, title),
     description: shortText(descriptionRaw ? stripHtml(descriptionRaw) : undefined),
-    imageUrl,
+    imageUrl: pickHttpUrl(imageUrl),
     sourceUrl: customLink ?? SOURCE_URL_DEFAULT,
     free_entry: ext?.free_entry === true || ext?.free_entry === 1 || ext?.free_entry === "true" || ext?.free_entry === "1" || undefined,
-    ticket_link: typeof ext?.ticket_link === "string" && ext.ticket_link.trim() ? ext.ticket_link.trim() : undefined,
+    ticket_link: pickHttpUrl(ext?.ticket_link),
   };
 };
 
-export const isEventsCacheEmpty = (): boolean => cachedEvents === null;
-
+export const isEventsCacheEmpty = (): boolean => readSnapshot<EventItem[]>("events") === null;
 export const isEventsImportAttempted = (): boolean => importAttempted;
-
-export const getRawEvents = (): EventItem[] => {
-  if (cachedEvents && cachedEvents.length > 0) {
-    return cachedEvents;
-  }
-  if (importAttempted && (!cachedEvents || cachedEvents.length === 0)) {
-    return [];
-  }
-  // Before first import attempt, keep a tiny local fallback to avoid a totally empty dev shell.
-  return fallbackEvents;
-};
+export const getRawEvents = (): EventItem[] => readSnapshot<EventItem[]>("events") ?? [];
 
 const parseDate = (value: string): number => {
   return new Date(value).getTime();
@@ -227,7 +218,7 @@ export const selectEvents = (
 };
 
 const fetchRawItems = async (url: string): Promise<unknown[]> => {
-  const response = await fetch(url.trim(), { headers: { accept: "application/json" } });
+  const response = await fetch(url.trim(), { headers: { accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
   if (!response.ok) {
     throw new Error(`Source request failed with ${response.status} for ${url}`);
   }
@@ -239,10 +230,10 @@ const fetchRawItems = async (url: string): Promise<unknown[]> => {
   if (payload && typeof payload === "object" && "data" in payload && Array.isArray((payload as { data: unknown[] }).data)) {
     return (payload as { data: unknown[] }).data;
   }
-  return [];
+  throw new Error("Invalid event source payload");
 };
 
-export const importEventsFromSource = async (sourceUrl = SOURCE_URL_DEFAULT): Promise<number> => {
+const runImport = async (sourceUrl = SOURCE_URL_DEFAULT): Promise<number> => {
   const urls = (sourceUrl ?? SOURCE_URL_DEFAULT).split(",").map((u) => u.trim()).filter((u) => u.length > 0);
   importAttempted = true;
 
@@ -266,9 +257,21 @@ export const importEventsFromSource = async (sourceUrl = SOURCE_URL_DEFAULT): Pr
   });
 
   // Always set cache to an array after a successful import attempt, even if empty.
-  cachedEvents = deduped;
+  transaction(() => {
+    writeSnapshot("events", deduped);
+    markImport(deduped.length);
+  });
   const addresses = deduped.map((e) => e.locationName).filter((a): a is string => !!a);
   scheduleGeocoding(addresses);
-  void notifyNewEvents(deduped);
+  void notifyNewEvents(deduped).catch(() => console.error("Event notification delivery failed"));
   return deduped.length;
 };
+
+export async function importEventsFromSource(sourceUrl = process.env.EVENTS_SOURCE_URL ?? SOURCE_URL_DEFAULT): Promise<number> {
+  if (pendingImport) return pendingImport;
+  pendingImport = runImport(sourceUrl).catch(error => {
+    markImportError("event_source_unavailable");
+    throw error;
+  });
+  try { return await pendingImport; } finally { pendingImport = undefined; }
+}

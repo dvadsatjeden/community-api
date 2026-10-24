@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import type { Request, Response } from "express";
-import { deriveNostrCredentials } from "./nostr-crypto";
+import { deriveNostrCredentials, sha256HexUtf8 } from "./nostr-crypto.js";
 import {
   _resetNostrChallengesForTesting,
   NOSTR_AUTH_EVENT_KIND,
   nostrAuthChallengeGet,
   nostrAuthVerifyPost,
-} from "./nostr-auth.controller";
+} from "./nostr-auth.controller.js";
 
 const SECRET = "test-nostr-auth-secret-for-vitest-only";
 
@@ -48,8 +48,13 @@ describe("deriveNostrCredentials", () => {
     expect(a).toEqual(b);
     expect(a.ownerId).toHaveLength(32);
     expect(a.rsvpToken).toHaveLength(64);
-    expect(a.dataKey).toHaveLength(64);
     expect(a.mnemonic.split(/\s+/)).toHaveLength(12);
+  });
+
+  it("derives the same account from the 12-word backup as the browser", () => {
+    const credentials = deriveNostrCredentials(SECRET, "a".repeat(64));
+    expect(credentials.ownerId).toBe(sha256HexUtf8(`owner:${credentials.mnemonic}`).slice(0, 32));
+    expect(credentials.rsvpToken).toBe(sha256HexUtf8(`rsvp:${credentials.mnemonic}`));
   });
 
   it("rejects invalid pubkey hex", () => {
@@ -116,7 +121,6 @@ describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
     const body = vRes.__body as {
       ownerId: string;
       rsvpToken: string;
-      dataKey: string;
       mnemonic: string;
       nostrPubkeyHex: string;
     };
@@ -124,7 +128,6 @@ describe("nostrAuthChallengeGet / nostrAuthVerifyPost", () => {
     const expected = deriveNostrCredentials(SECRET, pk);
     expect(body.ownerId).toBe(expected.ownerId);
     expect(body.rsvpToken).toBe(expected.rsvpToken);
-    expect(body.dataKey).toBe(expected.dataKey);
     expect(body.mnemonic).toBe(expected.mnemonic);
   });
 

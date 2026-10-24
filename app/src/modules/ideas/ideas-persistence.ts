@@ -1,174 +1,56 @@
-import crypto from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import type { IdeaItem, IdeaComment, IdeaCategoryId } from "../contracts";
+import { createHash } from "node:crypto";
+import { getDatabase } from "../../storage/database.js";
+import type { IdeaItem, IdeaComment } from "../contracts.js";
+export type { IdeaItem, IdeaComment, IdeaCategoryId } from "../contracts.js";
 
-const ideasPath = (): string =>
-  process.env.IDEAS_PERSIST_PATH
-    ? resolve(process.env.IDEAS_PERSIST_PATH)
-    : resolve(process.cwd(), "data", "ideas-data.json");
+export const hashToken = (token: string): string => createHash("sha256").update(token).digest("hex");
+export const getIdeas = (): IdeaItem[] => getDatabase().prepare("SELECT data FROM ideas").all().map(row => JSON.parse(String(row.data)));
+export const getComments = (): IdeaComment[] => getDatabase().prepare("SELECT data FROM comments").all().map(row => JSON.parse(String(row.data)));
 
-type PersistedData = {
-  ideas: IdeaItem[];
-  comments: IdeaComment[];
-  upvotes: Record<string, Record<string, true>>;
-};
+export function addIdea(idea: IdeaItem): void {
+  getDatabase().prepare("INSERT INTO ideas VALUES (?, ?)").run(idea.id, JSON.stringify(idea));
+}
 
-type InMemory = {
-  ideas: IdeaItem[];
-  comments: IdeaComment[];
-  upvotes: Map<string, Set<string>>;
-};
+export function updateIdea(id: string, patch: Partial<Pick<IdeaItem, "title" | "description" | "categoryId" | "categoryOther" | "authorPseudonym" | "websiteUrl" | "signalUrl" | "status">>): IdeaItem | null {
+  const existing = getIdeas().find(idea => idea.id === id);
+  if (!existing) return null;
+  const next = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+  getDatabase().prepare("UPDATE ideas SET data = ? WHERE id = ?").run(JSON.stringify(next), id);
+  return next;
+}
 
-let cache: InMemory | null = null;
+export function deleteIdea(id: string): boolean {
+  return Number(getDatabase().prepare("DELETE FROM ideas WHERE id = ?").run(id).changes) > 0;
+}
 
-export const hashToken = (token: string): string =>
-  crypto.createHash("sha256").update(token).digest("hex");
+export function addComment(comment: IdeaComment): void {
+  getDatabase().prepare("INSERT INTO comments VALUES (?, ?, ?)").run(comment.id, comment.ideaId, JSON.stringify(comment));
+}
 
-const load = (): void => {
-  if (cache !== null) return;
-  const p = ideasPath();
-  if (!existsSync(p)) {
-    cache = { ideas: [], comments: [], upvotes: new Map() };
-    return;
-  }
-  try {
-    const raw = JSON.parse(readFileSync(p, "utf8")) as PersistedData;
-    const upvotes = new Map<string, Set<string>>();
-    for (const [ideaId, byHash] of Object.entries(raw.upvotes ?? {})) {
-      upvotes.set(ideaId, new Set(Object.keys(byHash)));
-    }
-    cache = {
-      ideas: (raw.ideas ?? []) as IdeaItem[],
-      comments: (raw.comments ?? []) as IdeaComment[],
-      upvotes,
-    };
-  } catch {
-    cache = { ideas: [], comments: [], upvotes: new Map() };
-  }
-};
+export function updateComment(id: string, patch: Partial<Pick<IdeaComment, "body" | "authorPseudonym">>): IdeaComment | null {
+  const existing = getComments().find(comment => comment.id === id);
+  if (!existing) return null;
+  const next = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+  getDatabase().prepare("UPDATE comments SET data = ? WHERE id = ?").run(JSON.stringify(next), id);
+  return next;
+}
 
-const persist = (): void => {
-  if (cache === null) return;
-  const p = ideasPath();
-  const dir = dirname(p);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const upvotesObj: Record<string, Record<string, true>> = {};
-  for (const [ideaId, hashes] of cache.upvotes) {
-    upvotesObj[ideaId] = Object.fromEntries([...hashes].map((h) => [h, true as const]));
-  }
-  const data: PersistedData = { ideas: cache.ideas, comments: cache.comments, upvotes: upvotesObj };
-  writeFileSync(p, JSON.stringify(data, null, 0) + "\n", "utf8");
-};
+export const deleteComment = (id: string): boolean => Number(getDatabase().prepare("DELETE FROM comments WHERE id = ?").run(id).changes) > 0;
 
-export const getIdeas = (): IdeaItem[] => { load(); return cache!.ideas; };
-export const getComments = (): IdeaComment[] => { load(); return cache!.comments; };
-
-export const addIdea = (idea: IdeaItem): void => {
-  load();
-  cache!.ideas.push(idea);
-  persist();
-};
-
-export const updateIdea = (
-  id: string,
-  patch: Partial<Pick<IdeaItem, "title" | "description" | "categoryId" | "categoryOther" | "authorPseudonym">>
-): IdeaItem | null => {
-  load();
-  const idx = cache!.ideas.findIndex((i) => i.id === id);
-  if (idx === -1) return null;
-  cache!.ideas[idx] = { ...cache!.ideas[idx]!, ...patch, updatedAt: new Date().toISOString() };
-  persist();
-  return cache!.ideas[idx]!;
-};
-
-export const deleteIdea = (id: string): boolean => {
-  load();
-  const before = cache!.ideas.length;
-  cache!.ideas = cache!.ideas.filter((i) => i.id !== id);
-  cache!.comments = cache!.comments.filter((c) => c.ideaId !== id);
-  cache!.upvotes.delete(id);
-  if (cache!.ideas.length < before) { persist(); return true; }
-  return false;
-};
-
-export const addComment = (comment: IdeaComment): void => {
-  load();
-  cache!.comments.push(comment);
-  persist();
-};
-
-export const updateComment = (
-  cid: string,
-  patch: Partial<Pick<IdeaComment, "body" | "authorPseudonym">>
-): IdeaComment | null => {
-  load();
-  const idx = cache!.comments.findIndex((c) => c.id === cid);
-  if (idx === -1) return null;
-  cache!.comments[idx] = { ...cache!.comments[idx]!, ...patch, updatedAt: new Date().toISOString() };
-  persist();
-  return cache!.comments[idx]!;
-};
-
-export const deleteComment = (cid: string): boolean => {
-  load();
-  const before = cache!.comments.length;
-  cache!.comments = cache!.comments.filter((c) => c.id !== cid);
-  if (cache!.comments.length < before) { persist(); return true; }
-  return false;
-};
-
-export const toggleUpvote = (ideaId: string, voterToken: string): boolean => {
-  load();
-  const h = hashToken(voterToken);
-  const set = cache!.upvotes.get(ideaId) ?? new Set<string>();
-  if (set.has(h)) {
-    set.delete(h);
-    if (set.size === 0) cache!.upvotes.delete(ideaId); else cache!.upvotes.set(ideaId, set);
-    persist();
-    return false;
-  }
-  set.add(h);
-  cache!.upvotes.set(ideaId, set);
-  persist();
+// Setting an upvote is idempotent: retries never undo a successful vote.
+export function toggleUpvote(ideaId: string, token: string): boolean {
+  getDatabase().prepare("INSERT OR IGNORE INTO upvotes VALUES (?, ?)").run(ideaId, hashToken(token));
   return true;
-};
+}
 
-export const removeUpvote = (ideaId: string, voterToken: string): void => {
-  load();
-  const h = hashToken(voterToken);
-  const set = cache!.upvotes.get(ideaId);
-  if (!set) return;
-  set.delete(h);
-  if (set.size === 0) cache!.upvotes.delete(ideaId);
-  persist();
+export const removeUpvote = (ideaId: string, token: string): void => {
+  getDatabase().prepare("DELETE FROM upvotes WHERE idea_id = ? AND token_hash = ?").run(ideaId, hashToken(token));
 };
+export const getUpvoteCount = (ideaId: string): number => Number(getDatabase().prepare("SELECT count(*) AS count FROM upvotes WHERE idea_id = ?").get(ideaId)!.count);
+export const hasUpvoted = (ideaId: string, token: string): boolean => !!getDatabase().prepare("SELECT 1 FROM upvotes WHERE idea_id = ? AND token_hash = ?").get(ideaId, hashToken(token));
+export const getMyUpvotes = (token: string): Record<string, boolean> => Object.fromEntries(getDatabase().prepare("SELECT idea_id FROM upvotes WHERE token_hash = ?").all(hashToken(token)).map(row => [String(row.idea_id), true]));
 
-export const getUpvoteCount = (ideaId: string): number => {
-  load();
-  return cache!.upvotes.get(ideaId)?.size ?? 0;
-};
-
-export const hasUpvoted = (ideaId: string, voterToken: string): boolean => {
-  load();
-  return cache!.upvotes.get(ideaId)?.has(hashToken(voterToken)) ?? false;
-};
-
-export const getMyUpvotes = (voterToken: string): Record<string, boolean> => {
-  load();
-  const h = hashToken(voterToken);
-  const result: Record<string, boolean> = {};
-  for (const [ideaId, set] of cache!.upvotes) {
-    if (set.has(h)) result[ideaId] = true;
-  }
-  return result;
-};
-
-export const _resetCacheForTesting = (): void => {
-  cache = null;
-  const p = ideasPath();
-  if (existsSync(p)) unlinkSync(p);
-};
-
-// re-export for controller
-export type { IdeaItem, IdeaComment, IdeaCategoryId };
+export function _resetCacheForTesting(): void {
+  if (process.env.NODE_ENV !== "test") throw new Error("Test reset outside test environment");
+  getDatabase().exec("DELETE FROM ideas");
+}

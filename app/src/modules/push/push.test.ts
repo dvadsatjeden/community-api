@@ -6,8 +6,8 @@ import { randomUUID } from "node:crypto";
 process.env.PUSH_SUBSCRIPTIONS_PATH = join(tmpdir(), `push-subs-${randomUUID()}.json`);
 process.env.PUSH_NOTIFIED_PATH = join(tmpdir(), `push-notified-${randomUUID()}.json`);
 
-import { _resetForTesting, getSubscriptionCount, getVapidPublicKey, notifyNewEvents, removeSubscription, saveSubscription } from "./push";
-import type { EventItem } from "../contracts";
+import { _resetForTesting, getSubscriptionCount, getVapidPublicKey, notifyNewEvents, removeSubscription, saveSubscription } from "./push.js";
+import type { EventItem } from "../contracts.js";
 
 const fakeSub = (n = 1) => ({
   endpoint: `https://push.example.com/sub${n}`,
@@ -21,6 +21,8 @@ const futureEvent = (id: string): EventItem => ({
 });
 
 beforeEach(() => {
+  delete process.env.VAPID_PUBLIC_KEY;
+  delete process.env.VAPID_PRIVATE_KEY;
   _resetForTesting();
   vi.restoreAllMocks();
 });
@@ -72,6 +74,7 @@ describe("getVapidPublicKey", () => {
 
   it("returns the key when set", () => {
     process.env.VAPID_PUBLIC_KEY = "test-key";
+    process.env.VAPID_PRIVATE_KEY = "test-private-key";
     expect(getVapidPublicKey()).toBe("test-key");
   });
 });
