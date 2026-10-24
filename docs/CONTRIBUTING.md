@@ -1,16 +1,16 @@
 # Vývoj a GitHub review
 
-Aj pri jednom vývojárovi používame jednoduché krátke vetvy a pull requesty. `origin` smeruje na `dvadsatjeden/community-api`; samostatný remote `upstream` netreba. Parameter `-u` pri pushi nastavuje sledovanie vzdialenej vetvy a nesúvisí s názvom remote.
+Používame krátke vetvy a pull requesty cez používateľov fork. `origin` smeruje na `webiumsk/community-api`, `upstream` na projektový repozitár `dvadsatjeden/community-api`. Pracovné vetvy pushujeme do `origin`. Parameter `-u` pri pushi nastavuje sledovanie vzdialenej vetvy a nesúvisí s názvom remote `upstream`. PR aj merge robí používateľ.
 
 ## Každá zmena
 
-1. Aktualizovať `origin/main` a vytvoriť novú vetvu (`feature/...`, `fix/...`). Zachovať existujúce rozpracované súbory.
+1. Spustiť `git fetch upstream` a vytvoriť novú vetvu (`feature/...`, `fix/...`) z aktuálneho `upstream/main`. Zachovať existujúce rozpracované súbory.
 2. Pripraviť jednu ucelenú zmenu. V oboch balíkoch podľa rozsahu spustiť `npm test` a `npm run build` na Node.js 24.
 3. Commitnúť zmenu a pushnúť vetvu cez `git push -u origin <vetva>`.
-4. Otvoriť PR do `main` s popisom problému, výsledného správania a validácie.
+4. Používateľ otvorí PR z `webiumsk/community-api:<vetva>` do `dvadsatjeden/community-api:main` s popisom problému, výsledného správania a validácie. Agent PR nevytvára.
 5. Počkať na CI aj CodeRabbit. Kontrola musí patriť k najnovšiemu commitu. Overiť komentáre a otvorené review vlákna, nie len zelenú ikonku.
 6. Opraviť vecné pripomienky a opäť počkať na review. Ak odporúčanie nie je správne, vysvetliť dôvod vo vlákne; nevyriešené námietky nepovažovať automaticky za súhlas.
-7. Mergnúť až po úspešnom CI a dokončenom review bez nevyriešených vecných pripomienok. Následne nasadiť a overiť živú verziu.
+7. Používateľ mergne PR až po úspešnom CI a dokončenom review bez nevyriešených vecných pripomienok. Agent PR nemerguje. Po overení merge nasadiť a overiť živú verziu.
 
 CodeRabbit môže dokončiť kontrolu bez inline pripomienok. Hľadaj potvrdenie „No actionable comments were generated“. Prázdny zoznam komentárov, preskočená kontrola alebo vyčerpaný limit samy osebe nepotvrdzujú úspešné review.
 
