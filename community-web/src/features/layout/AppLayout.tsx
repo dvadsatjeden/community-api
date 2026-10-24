@@ -1,12 +1,13 @@
 import type { ReactElement } from "react";
+import logoDvadsatjedenUrl from "../../app/logos/logo-dvadsatjeden.svg?url";
 
 export type AppView = "uvod" | "home" | "calendar" | "map" | "ideas" | "info";
 
-export function CommunityMark(): ReactElement {
-  return <svg className="dvcBrandMark" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-    <rect x="2" y="2" width="60" height="60" rx="11" fill="currentColor" />
-    <path d="M13 23v-4h18v10H15v16h17M43 19h5v26" stroke="#090a0c" strokeWidth="5" strokeLinecap="square" strokeLinejoin="miter" />
-  </svg>;
+function BrandIdentity(): ReactElement {
+  return <span className="dvcBrandIdentity">
+    <img className="dvcBrandLogo" src={logoDvadsatjedenUrl} width="265" height="36" alt="" />
+    <span className="dvcBrandCaption">bitcoin komunita</span>
+  </span>;
 }
 
 const sections: Record<AppView, { label: string; title: string; description: string }> = {
@@ -38,7 +39,7 @@ export function AppNavigation({ view, onNavigate, events, map, ideas }: Navigati
   ];
   return <nav className="dvcNav" aria-label="Navigácia">
     <button className="dvcNavBrand" type="button" onClick={() => onNavigate("uvod")} aria-label="Dvadsatjeden — domov">
-      <CommunityMark /><span><span className="dvcBrandName">dvadsatjeden</span><span className="dvcBrandCaption">bitcoin komunita</span></span>
+      <BrandIdentity />
     </button>
     {items.filter(item => item.show).map(item => {
       const active = view === item.view || (item.view === "home" && view === "calendar");
@@ -52,7 +53,7 @@ export function AppNavigation({ view, onNavigate, events, map, ideas }: Navigati
 
 export function AppHeader({ view, hasAccount, onHome, onAccount }: { view: AppView; hasAccount: boolean; onHome: () => void; onAccount: () => void }): ReactElement {
   return <header className="dvcAppHeader">
-    <button type="button" className="dvcHeaderBrand" onClick={onHome} aria-label="Dvadsatjeden — domov"><CommunityMark /><span><span className="dvcBrandName">dvadsatjeden</span><span className="dvcBrandCaption">bitcoin komunita</span></span></button>
+    <button type="button" className="dvcHeaderBrand" onClick={onHome} aria-label="Dvadsatjeden — domov"><BrandIdentity /></button>
     <span className="dvcHeaderContext">{sections[view].label}</span>
     <button type="button" className="dvcHeaderAccount" onClick={onAccount} aria-label={hasAccount ? "Otvoriť môj účet" : "Vytvoriť alebo obnoviť účet"}><NavigationIcon kind="info" /><span>{hasAccount ? "Môj účet" : "Prihlásiť sa"}</span></button>
   </header>;

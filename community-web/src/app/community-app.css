@@ -75,8 +75,8 @@ body { margin: 0; background: #08090b; }
 .dvcNav { position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; width: 236px; display: flex; flex-direction: column; gap: 7px; padding: 31px 20px 25px; border-right: 1px solid #242932; color: #c4cad3; background: #0c0e11; }
 .dvcNavBrand { width: 100%; border: 0; background: transparent; text-align: left; display: flex; align-items: center; gap: 11px; color: #f2f4f7; margin: 0 0 41px; padding: 0 6px; text-decoration: none; }
 .dvcNavBrand:hover { color: #f2f4f7; }
-.dvcBrandMark { width: 38px; height: 38px; flex: 0 0 38px; color: var(--dvc-btc); }
-.dvcBrandName { display: block; font-family: var(--dvc-font-body); font-size: 1.23rem; letter-spacing: -.045em; line-height: 1.15; font-weight: 750; }
+.dvcBrandIdentity { display: block; width: 184px; max-width: 100%; }
+.dvcBrandLogo { display: block; width: 100%; height: auto; }
 .dvcBrandCaption { display: block; font-family: var(--dvc-font-mono); color: var(--dvc-muted-2); font-size: .55rem; letter-spacing: .11em; text-transform: uppercase; margin-top: 6px; line-height: 1.3; }
 .dvcNavItem { width: 100%; display: flex; align-items: center; gap: 13px; min-height: 48px; padding: 11px 14px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #aeb6c3; text-align: left; font-size: .86rem; font-weight: 500; transition: background .16s, color .16s; }
 .dvcNavItem svg { width: 20px; height: 20px; flex-shrink: 0; opacity: .8; }
@@ -473,8 +473,6 @@ body { margin: 0; background: #08090b; }
 @media (max-width: 1050px) and (min-width: 861px) {
   .dvcNav { width: 202px; padding-right: 14px; padding-left: 14px; }
   .dvcNavBrand { gap: 7px; padding: 0; }
-  .dvcNavBrand .dvcBrandMark { width: 31px; flex-basis: 31px; }
-  .dvcNavBrand .dvcBrandName { font-size: 1.2rem; }
   .dvcNavBrand .dvcBrandCaption { font-size: .49rem; }
   .dvcShell { width: calc(100% - 202px); margin-left: 202px; padding-right: 25px; padding-left: 25px; }
   .dvcAtlasTitle { font-size: 2.55rem; }
@@ -496,8 +494,8 @@ body { margin: 0; background: #08090b; }
   .dvcShell { width: 100%; max-width: 840px; margin: 0 auto; padding: 20px 27px calc(108px + env(safe-area-inset-bottom)); }
   .dvcAppHeader { margin-bottom: 22px; padding-bottom: 18px; }
   .dvcHeaderBrand { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; color: var(--dvc-ink); text-align: left; text-decoration: none; }
-  .dvcHeaderBrand .dvcBrandMark { width: 35px; height: 35px; flex-basis: 35px; }
-  .dvcHeaderBrand .dvcBrandName { font-size: 1.35rem; }
+  .dvcHeaderBrand { min-width: 0; }
+  .dvcHeaderBrand .dvcBrandIdentity { width: 176px; }
   .dvcHeaderBrand .dvcBrandCaption { font-size: .51rem; margin-top: 5px; }
   .dvcHeaderContext { display: none; }
   .dvcHeaderAccount { min-height: 39px; padding: 8px 12px; font-size: .74rem; }
@@ -625,8 +623,7 @@ body { margin: 0; background: #08090b; }
 @media (max-width: 380px) {
   .dvcShell { padding-right: 16px; padding-left: 16px; }
   .dvcHeaderBrand { gap: 7px; }
-  .dvcHeaderBrand .dvcBrandMark { width: 31px; height: 31px; flex-basis: 31px; }
-  .dvcHeaderBrand .dvcBrandName { font-size: 1.23rem; }
+  .dvcHeaderBrand .dvcBrandIdentity { width: 145px; }
   .dvcHeaderBrand .dvcBrandCaption { font-size: .46rem; }
   .dvcHeaderAccount { gap: 5px; padding: 7px 9px; font-size: .69rem; }
   .dvcAtlasTitle { font-size: 2.05rem; }

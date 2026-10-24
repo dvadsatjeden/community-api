@@ -8,6 +8,7 @@ Aktuálny návrh používa čiernu, bitcoinovú oranžovú a vecné slovenské t
 - Bitcoinová oranžová pre hlavné akcie a aktívnu navigáciu; zelená iba pre úspešné stavy.
 - Systémové sans písmo pre obsah, monospace pre dátumy a metadáta. Bez externého fontového CDN.
 - Kompaktná typografia, malé polomery rohov, jasný kontrast a čitateľné disabled/error stavy.
+- Pôvodný bielo-oranžový wordmark Dvadsatjeden v bočnej navigácii a mobilnej hlavičke. SVG je uložené lokálne v `community-web/src/app/logos/logo-dvadsatjeden.svg`; zdrojom je pôvodné [Logo-Mensie.svg](https://www.dvadsatjeden.org/wp-content/uploads/2023/09/Logo-Mensie.svg).
 - Vlastná geometrická značka `21` v ikone aplikácie. Hlavná WordPress stránka ani jej logo sa tým nemenia.
 
 ## Rozloženie a texty
