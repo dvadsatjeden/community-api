@@ -16,7 +16,7 @@ Pred deaktiváciou pôvodného pluginu na externom webe over hodnotu `COMMUNITIE
 
 1. Ak API používa `/wp-json/dvadsatjeden/v1/communities`, ponechaj ho aktívne, kým zdrojový web poskytne samostatný export mapy. Exportér `integrations/wordpress/community-source.php` patrí na zdrojový web do `wp-content/mu-plugins/` a číta údaje z obsahového pluginu `community-map`.
 2. Pred prepnutím porovnaj odpovede starého a nového zdroja vrátane vstupných ID, názvov, súradníc a odkazov na pripojenie. Nastav overený endpoint `/wp-json/community-map/v1/communities` a znova vytvor kontajner API.
-3. Over čerstvý `lastSuccessAt`, prázdny `lastError` na `/v1/communities/status`, rovnaké ID v `/v1/communities` a otvorenie pôvodného odkazu na pripojenie. Na stránkach so starým vložením nahraď shortcode odkazom na [samostatnú aplikáciu](https://app.dvadsatjeden.org). Potom môže správca webu deaktivovať pôvodný aplikačný plugin. Obsahový plugin `community-map` poskytuje údaje exportéru aj naďalej.
+3. Po opätovnom vytvorení kontajnera over, že jeho `COMMUNITIES_SOURCE_URL` smeruje na nový endpoint. Na tomto API spusti `POST /v1/communities/sync` s `Authorization: Bearer <IMPORT_SECRET>` a počkaj na odpoveď `200 OK`. Pri chybe ponechaj pôvodný plugin aktívny. Po úspešnej synchronizácii over rovnaké ID v `/v1/communities` a otvor pôvodný odkaz na pripojenie. Na stránkach so starým vložením nahraď shortcode odkazom na [samostatnú aplikáciu](https://app.dvadsatjeden.org). Potom môže správca webu deaktivovať pôvodný aplikačný plugin. Obsahový plugin `community-map` poskytuje údaje exportéru aj naďalej.
 
 ## Prvý prechod z pôvodných JSON dát
 
