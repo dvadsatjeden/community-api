@@ -2,7 +2,7 @@
 
 ## Realizované upratanie
 
-- Jeden samostatný frontend build a Docker obraz; app plugin je archivovaný.
+- Samostatný frontend build a Docker obraz. Podpora pôvodného pluginu na vkladanie appky do WordPressu sa skončila.
 - Oddelený, pravidelne obnovovaný API zdroj komunít s odstráneniami, stabilnými ID, uchovaním posledných úspešných údajov a stavom synchronizácie.
 - SQLite s verziou schémy, transakciami, cudzími kľúčmi, zálohou a overením obnovy; jednorazový import pôvodných JSON dát.
 - Server je zdroj pravdy pre RSVP, Evolu a jeho duplicitná synchronizácia sú odstránené.
@@ -13,10 +13,6 @@
 - Testy API kontraktov, synchronizácie a obnovy; CI kontroluje aj produkčné buildy.
 - Zachované rozpracované úpravy nápadov/projektov vrátane odkazov a archivácie.
 
-## Externý WordPress
-
-Deaktivácia starého app pluginu závisí od nasadenia samostatného dátového exportéra alebo od získania iného kompatibilného API komunít. Kým sa to nestane, živý zdroj musí zostať na pôvodnom endpointe. Postup je v OPERATIONS.md. Zmeny v tomto repozitári samy externý WP neupravia.
-
 ## Ďalšie produktové kroky
 
 Po stabilizácii nasadenia a spätnej väzbe komunity:
@@ -26,5 +22,3 @@ Po stabilizácii nasadenia a spätnej väzbe komunity:
 3. Pohodlné moderátorské rozhranie a nahlasovanie obsahu; dnes sú k dispozícii chránené API operácie.
 4. Audit mobilnej prístupnosti, klávesnice a práce s modalmi; ďalšie rozdelenie veľkého App.tsx.
 5. Integrácia obchodníkov len s konkrétnym priebežne aktualizovaným zdrojom.
-
-Tieto rozšírenia nie sú podmienkou odstránenia WP app pluginu a nie sú vydávané za dokončené funkcie.

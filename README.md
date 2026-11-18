@@ -1,11 +1,10 @@
 # Dvadsatjeden — komunitná aplikácia
 
-Samostatná React PWA pre Bitcoin komunity na Slovensku a v Česku. WordPress slúži na obsah a ako vymeniteľný zdroj údajov; aplikácia sa doň nevkladá.
+Samostatná React PWA pre Bitcoin komunity na Slovensku a v Česku beží na [app.dvadsatjeden.org](https://app.dvadsatjeden.org). Podpora pôvodného pluginu na vkladanie aplikácie do WordPressu sa skončila.
 
 - `community-web/`: React 19, Vite, Leaflet, inštalovateľná PWA.
 - `app/`: Express 5 + TypeScript, Node.js 24, SQLite s transakciami a WAL.
 - `integrations/wordpress/community-source.php`: voliteľný malý API exportér existujúcej mapy komunít.
-- `archive/wordpress-plugin/`: pôvodný app plugin, mimo aktívneho buildu.
 
 Produkcia: `app.dvadsatjeden.org` → `api.dvadsatjeden.org`. Docker Compose používa existujúci Traefik v sieti `passbolt_default`.
 
@@ -15,13 +14,23 @@ Udalosti a kalendár, mapa komunít, anonymné RSVP, nápady/projekty a komentá
 
 RSVP a obsah sa ukladajú na serveri; Evolu bolo odstránené. Obnova pomocou rovnakých slov obnoví prístup aj na inom zariadení. Aplikácia potvrdí zmenu až po odpovedi API; offline zápisy neukladá do fronty. Offline je dostupný predtým načítaný aplikačný obal, nie kompletná mapa ani živé dáta.
 
-## Komunity cez API
+## Zdroje údajov
+
+Backend číta verejné WordPress API oboch komunitných webov.
+
+| Obsah | Zdroj | Nastavenie backendu |
+| --- | --- | --- |
+| Udalosti | `prevadzky.dvadsatjeden.org`, samostatné zoznamy pre SK a CZ | `EVENTS_SOURCE_URL` |
+| Komunity | `www.dvadsatjeden.org`, export mapy komunít | `COMMUNITIES_SOURCE_URL` |
+| Články | `www.dvadsatjeden.org/wp-json/wp/v2/posts` | `ARTICLES_SOURCE_URL` (voliteľné) |
+
+### Synchronizácia komunít
 
 `COMMUNITIES_SOURCE_URL` určuje externý JSON endpoint. API ho obnovuje po štarte a každých 15 minút; otvorená PWA načítava aktuálny zoznam každú minútu a pri návrate do okna.
 
 Úspešné načítanie **nahradí** zoznam: pribudnuté komunity sa pridajú, odstránené zmiznú. Výpadok, neplatný JSON alebo chybný záznam zachová posledný úspešný zoznam v SQLite aj po reštarte. Prázdne `items: []` znamená platný prázdny zoznam. API neodhadne zánik komunity samo — musí ho zohľadniť autoritatívny zdroj.
 
-Formát, stabilné ID a stav synchronizácie opisuje [API kontrakt](docs/API_CONTRACTS.md). Zdroj môže byť akékoľvek kompatibilné API; nemusí to byť WordPress.
+Formát, stabilné ID a stav synchronizácie opisuje [API kontrakt](docs/API_CONTRACTS.md).
 
 ## Vývoj
 
@@ -51,7 +60,7 @@ V oboch adresároch spusti `npm test` a `npm run build`. CI kontroluje testy, Ty
 
 ## Nasadenie a správa
 
-Postup, konfigurácia, odpojenie starého WP pluginu, zálohy a návrat verzie sú v [prevádzkovom návode](docs/OPERATIONS.md).
+Postup nasadenia, konfigurácia zdrojov, zálohy a návrat verzie sú v [prevádzkovom návode](docs/OPERATIONS.md).
 
 ```bash
 docker compose build
