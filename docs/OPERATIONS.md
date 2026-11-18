@@ -10,16 +10,17 @@ Základ je `.env.example`. Vyplň silný `IMPORT_SECRET` (napr. `openssl rand -h
 
 Úložisko je `DATABASE_PATH=/app/data/sqlite/community.sqlite`, bind mount `./data:/app/data`. API beží ako používateľ `node` (UID 1000). Pred prvým nasadením priprav `data/sqlite` a `data/backups` s právami na zápis pre UID 1000. Staré JSON súbory ponechaj čitateľné pre jednorazový import.
 
-## Prvý prechod z pôvodnej aplikácie
+## Zdroj mapy po vyradení aplikačného pluginu
 
-1. Zálohuj zdrojový strom, `.env`, staré `data/` a aktuálne obrazy. Neukladaj tajomstvá do Gitu.
-2. V externom WordPresse nahraj `integrations/wordpress/community-source.php` do `wp-content/mu-plugins/community-source.php`. Samotný `community-map` a jeho údaje zostávajú zdrojom.
-3. Over nový `https://www.dvadsatjeden.org/wp-json/community-map/v1/communities`: musí vrátiť aktuálny zoznam a pridať/odstrániť komunity podľa zdroja. Chýbajúci dátový súbor musí byť chyba, nie prázdny úspech.
-4. Nastav `COMMUNITIES_SOURCE_URL` na tento endpoint a reštartuj API. Dovtedy môže zostať pôvodný `/wp-json/dvadsatjeden/v1/communities` — v tomto prípade starý plugin na WP ešte nevypínaj.
-5. Nahraď shortcody `[dvadsatjeden_community_app]` a `[dvadsatjeden_remote_calendar]` odkazom/presmerovaním na PWA. Potom deaktivuj starý **Community app** plugin, nie obsahový `community-map`.
-6. Over mapu, nový aj odstránený záznam, odkaz na komunitu a stav synchronizácie. Následne možno starý app plugin z externého WP odstrániť.
+Pred deaktiváciou pôvodného pluginu na externom webe over hodnotu `COMMUNITIES_SOURCE_URL` v nasadenom API. Posledná úspešná synchronizácia môže pochádzať aj z pôvodného pluginu.
 
-Nový malý exportér nemá JS/CSS, nastavenia, účet ani administračné operácie aplikácie. Je potrebný len preto, že súčasný obsahový zdroj iné API nemá. Ak dostaneš samostatné kompatibilné API, zmeň URL a môžeš odstrániť aj exportér.
+1. Ak API používa `/wp-json/dvadsatjeden/v1/communities`, ponechaj ho aktívne, kým zdrojový web poskytne samostatný export mapy. Exportér `integrations/wordpress/community-source.php` patrí na zdrojový web do `wp-content/mu-plugins/` a číta údaje z obsahového pluginu `community-map`.
+2. Pred prepnutím porovnaj odpovede starého a nového zdroja vrátane vstupných ID, názvov, súradníc a odkazov na pripojenie. Nastav overený endpoint `/wp-json/community-map/v1/communities` a znova vytvor kontajner API.
+3. Po opätovnom vytvorení kontajnera over, že jeho `COMMUNITIES_SOURCE_URL` smeruje na nový endpoint. Na tomto API spusti `POST /v1/communities/sync` s `Authorization: Bearer <IMPORT_SECRET>` a počkaj na odpoveď `200 OK`. Pri chybe ponechaj pôvodný plugin aktívny. Po úspešnej synchronizácii over rovnaké ID v `/v1/communities` a otvor pôvodný odkaz na pripojenie. Na stránkach so starým vložením nahraď shortcode odkazom na [samostatnú aplikáciu](https://app.dvadsatjeden.org). Potom môže správca webu deaktivovať pôvodný aplikačný plugin. Obsahový plugin `community-map` poskytuje údaje exportéru aj naďalej.
+
+## Prvý prechod z pôvodných JSON dát
+
+Pred migráciou zálohuj zdrojový strom, konfiguráciu, pôvodný adresár `data/` a aktuálne obrazy.
 
 Pri prvom štarte sa staré JSON RSVP, nápady, komentáre, hlasy, push odbery a geocoding importujú v jednej transakcii. Originály sa nemenia. Poškodený JSON zastaví štart; nikdy sa nenahradí tichým prázdnym úložiskom. Úspech sa označí v SQLite a import sa neopakuje. Staré import-status/push-notified súbory sa neprenášajú; prvý import udalostí vytvorí aktuálny stav. Existujúce push odbery môžu dostať súhrn aktuálnych budúcich udalostí. Produkcia zatiaľ nemá používateľov, takže sa zaviedlo nové úložisko lokálneho účtu v2 a opravené odvodzovanie Nostr účtu.
 

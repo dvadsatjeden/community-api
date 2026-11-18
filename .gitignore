@@ -19,11 +19,6 @@ community-web/dist/
 community-web/dist-standalone/
 standalone-dist/
 
-# Historical WP assets are kept locally only.
-archive/wordpress-plugin/**/assets/*
-!archive/wordpress-plugin/**/assets/icon-192.png
-!archive/wordpress-plugin/**/assets/icon-512.png
-
 # ZIP releases
 *.zip
 
